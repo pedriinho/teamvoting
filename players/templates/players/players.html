@@ -1,0 +1,7 @@
+<h1>Nota dos Jogadores</h1>
+{% for player in players %}
+<ul>
+  <li>{{ player.name }} - Média: {{ player.average_score|floatformat:2 }}</li>
+</ul>
+{% endfor %}
+<a href="{% url 'home' %}">Voltar</a>

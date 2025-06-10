@@ -1,0 +1,65 @@
+[tool.ruff.format]
+quote-style = "single"
+docstring-code-format = true
+
+[tool.ruff]
+line-length = 99
+lint.select = [
+    "A",
+    "ARG",
+    "B",
+    "C",
+    "C4",
+    "E",
+    "ERA",
+    "F",
+    "I",
+    "N",
+    "PLC",
+    "PLE",
+    "PLR",
+    "PLW",
+    "RET",
+    "S",
+    "T10",
+    "UP",
+    "W",
+]
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+lint.ignore = ["A003", "N806", "F403", "F405", "ARG001", "ARG002", "N801", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "C901"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"apps.py" = ["F401"]
+"tests/**" = ["ARG", "S"]
+"*/migrations/*.py" = ["E501"]
+"*/enums/*.py" = ["E501"]
