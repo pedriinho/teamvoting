@@ -14,54 +14,54 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name="Player",
+            name='Player',
             fields=[
                 (
-                    "id",
+                    'id',
                     models.BigAutoField(
                         auto_created=True,
                         primary_key=True,
                         serialize=False,
-                        verbose_name="ID",
+                        verbose_name='ID',
                     ),
                 ),
-                ("name", models.CharField(max_length=100)),
+                ('name', models.CharField(max_length=100)),
             ],
         ),
         migrations.CreateModel(
-            name="Vote",
+            name='Vote',
             fields=[
                 (
-                    "id",
+                    'id',
                     models.BigAutoField(
                         auto_created=True,
                         primary_key=True,
                         serialize=False,
-                        verbose_name="ID",
+                        verbose_name='ID',
                     ),
                 ),
-                ("score", models.PositiveSmallIntegerField()),
+                ('score', models.PositiveSmallIntegerField()),
                 (
-                    "player",
+                    'player',
                     models.ForeignKey(
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="votes",
-                        to="players.player",
+                        related_name='votes',
+                        to='players.player',
                     ),
                 ),
                 (
-                    "voter",
+                    'voter',
                     models.ForeignKey(
                         blank=True,
                         null=True,
                         on_delete=django.db.models.deletion.CASCADE,
-                        related_name="votes",
+                        related_name='votes',
                         to=settings.AUTH_USER_MODEL,
                     ),
                 ),
             ],
             options={
-                "unique_together": {("player", "voter")},
+                'unique_together': {('player', 'voter')},
             },
         ),
     ]
