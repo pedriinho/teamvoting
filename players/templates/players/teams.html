@@ -1,0 +1,10 @@
+<h1>Times formados</h1>
+{% for team in teams %}
+  <h2>Time {{ forloop.counter }}</h2>
+  <ul>
+    {% for player in team %}
+      <li>{{ player.name }} - Média: {{ player.average_score|floatformat:2 }}</li>
+    {% endfor %}
+  </ul>
+{% endfor %}
+<a href="{% url 'home' %}">Voltar</a>

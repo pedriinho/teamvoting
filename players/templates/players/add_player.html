@@ -1,0 +1,8 @@
+<h1>Adicionar Jogador</h1>
+<form method="post">
+  {% csrf_token %}
+  <label>Nome:</label>
+  <input type="text" name="name" required>
+  <button type="submit">Adicionar</button>
+</form>
+<a href="{% url 'home' %}">Voltar</a>

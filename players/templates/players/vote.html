@@ -1,0 +1,28 @@
+{% load custom_filters %}
+<h1>Votação</h1>
+<form method="post">
+  {% csrf_token %}
+  <!-- <label>Seu nome:</label>
+  <input type="text" name="voter_name" required><br><br> -->
+
+  {% for player in players %}
+    <label>{{ player.name }} (1 a 10):</label>
+    <input type="number" name="score_{{ player.id }}" min="1" max="10" 
+           value="{{ votes_dict|get_item:player.id|default:'' }}" required><br>
+  {% endfor %}
+  
+  <button type="submit">Enviar votos</button>
+</form>
+<a href="{% url 'home' %}">Voltar</a>
+
+
+
+<!-- <form method="post">
+  {% csrf_token %}
+  {% for player in players %}
+    <label>{{ player.name }}</label>
+    <input type="number" name="score_{{ player.id }}" min="1" max="10" 
+           value="{{ votes_dict|get_item:player.id|default:'' }}">
+  {% endfor %}
+  <button type="submit">Enviar votos</button>
+</form> -->

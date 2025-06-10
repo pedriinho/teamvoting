@@ -1,0 +1,28 @@
+{% if user.is_authenticated %}
+  Olá, {{ user.username }}! | <form action="{% url 'logout' %}" method="post" style="display:inline;">
+  {% csrf_token %}
+  <button type="submit" style="background:none; border:none; padding:0; cursor:pointer; color:blue; text-decoration:underline;">
+    Sair
+  </button>
+</form>
+ | <a href="{% url 'vote' %}">Votar</a>
+{% else %}
+  <a href="{% url 'login' %}">Entrar</a> | <a href="{% url 'signup' %}">Cadastrar</a>
+{% endif %}
+
+<h1>Jogadores cadastrados</h1>
+<ul>
+  {% for player in players %}
+    <li>{{ player.name }} - Média: {{ player.average_score|floatformat:2 }}</li>
+  {% empty %}
+    <li>Nenhum jogador cadastrado.</li>
+  {% endfor %}
+</ul>
+
+{% if user.admin %}
+<a href="{% url 'add_player' %}">Adicionar jogador</a> |
+{% endif %}
+{% if user.is_authenticated %}
+<a href="{% url 'vote' %}">Votar</a> |
+{% endif %}
+<a href="{% url 'teams' %}">Ver times</a>
