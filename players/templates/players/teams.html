@@ -1,10 +1,40 @@
-<h1>Times formados</h1>
-{% for team in teams %}
-  <h2>Time {{ forloop.counter }}</h2>
-  <ul>
-    {% for player in team %}
-      <li>{{ player.name }} - Média: {{ player.average_score|floatformat:2 }}</li>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Times Formados</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <!-- Navbar -->
+  {% include 'players/navbar.html' %}
+
+  <!-- Conteúdo centralizado abaixo da navbar -->
+  <div class="flex-grow flex flex-col items-center pt-20 px-4 gap-6">
+
+    <h1 class="text-3xl font-bold text-gray-800 mb-4">Times Formados</h1>
+
+    {% for team in teams %}
+      <div class="bg-white rounded-xl shadow-md w-full max-w-md p-6">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b border-gray-200 pb-2">Time {{ forloop.counter }}</h2>
+        <ul class="divide-y divide-gray-200">
+          {% for player in team %}
+            <li class="flex justify-between py-2 text-gray-800">
+              <span>{{ player.name }}</span>
+              <span class="font-medium text-gray-600">Média: {{ player.average_score|floatformat:2 }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
     {% endfor %}
-  </ul>
-{% endfor %}
-<a href="{% url 'home' %}">Voltar</a>
+
+    <a href="{% url 'home' %}" class="mt-6 text-center text-gray-600 hover:text-gray-900 transition">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+
+  </div>
+
+</body>
+</html>

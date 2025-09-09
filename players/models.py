@@ -4,6 +4,8 @@ from django.db import models
 
 class Player(models.Model):
     name = models.CharField(max_length=100)
+    is_main = models.BooleanField(default=False)  # True se estiver entre os 20 principais
+    queue_position = models.PositiveIntegerField(null=True, blank=True)  # posição na lista de espera
 
     def average_score(self):
         votes = self.votes.all()
@@ -13,6 +15,7 @@ class Player(models.Model):
 
     def __str__(self):
         return self.name
+
 
 
 class Vote(models.Model):

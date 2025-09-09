@@ -1,0 +1,38 @@
+<nav class="bg-white border-b border-gray-200 py-4 px-6 shadow-md flex justify-between items-center fixed top-0 left-0 w-full z-50">
+
+
+    <div class="flex items-center gap-3">
+        <i class="fas fa-futbol text-2xl text-gray-700"></i>
+        <a href="{% url 'home' %}" class="text-xl font-semibold text-gray-900 hover:text-gray-700 transition">
+            Gerenciamento de Jogadores
+        </a>
+
+    </div>
+    {% if user.is_authenticated %}
+    <div class="absolute left-1/2 transform -translate-x-1/2 text-gray-800 font-semibold">
+        Olá, {{ user.username }}!
+    </div>
+    {% endif %}
+    <div class="flex gap-3">
+        {% if user.is_authenticated and is_main_player %}
+            <a href="{% url 'vote' %}" class="btn-hover bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2">
+                <i class="fas fa-vote-yea"></i> Votar
+            </a>
+        {% endif %}
+        <a href="{% url 'teams' %}" class="btn-hover bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded flex items-center gap-2">
+            <i class="fas fa-users"></i> Ver Times
+        </a>
+        {% if user.is_authenticated %}
+            <form action="{% url 'logout' %}" method="post" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-hover bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center gap-2">
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </button>
+            </form>
+        {% else %}
+            <a href="{% url 'login' %}" class="btn-hover bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-2">
+                <i class="fas fa-sign-in-alt"></i> Login
+            </a>
+        {% endif %}
+    </div>
+</nav>

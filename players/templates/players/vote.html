@@ -1,28 +1,43 @@
 {% load custom_filters %}
-<h1>Votação</h1>
-<form method="post">
-  {% csrf_token %}
-  <!-- <label>Seu nome:</label>
-  <input type="text" name="voter_name" required><br><br> -->
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Votação</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
 
-  {% for player in players %}
-    <label>{{ player.name }} (1 a 10):</label>
-    <input type="number" name="score_{{ player.id }}" min="1" max="10" 
-           value="{{ votes_dict|get_item:player.id|default:'' }}" required><br>
-  {% endfor %}
-  
-  <button type="submit">Enviar votos</button>
-</form>
-<a href="{% url 'home' %}">Voltar</a>
+  <!-- Navbar no topo -->
+  {% include 'players/navbar.html' %}
 
+  <!-- Conteúdo centralizado abaixo da navbar -->
+  <div class="flex-grow flex justify-center pt-20 px-4">
+    <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+      <h1 class="text-2xl font-bold text-center mb-6 text-gray-800">Votação</h1>
+      
+      <form method="post" class="flex flex-col">
+        {% csrf_token %}
+        {% for player in players %}
+          <div class="flex justify-between items-center py-2 border-b border-gray-200 last:border-b-0">
+            <label class="font-medium text-gray-700">{{ player.name }}</label>
+            <input type="number" name="score_{{ player.id }}" min="1" max="10" 
+                   value="{{ votes_dict|get_item:player.id|default:'' }}" 
+                   class="w-16 text-center border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none" required>
+          </div>
+        {% endfor %}
+        
+        <button type="submit" class="mt-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition">
+          Enviar votos
+        </button>
+      </form>
 
+      <a href="{% url 'home' %}" class="block text-center mt-4 text-gray-600 hover:text-gray-900 transition">
+        Voltar
+      </a>
+    </div>
+  </div>
 
-<!-- <form method="post">
-  {% csrf_token %}
-  {% for player in players %}
-    <label>{{ player.name }}</label>
-    <input type="number" name="score_{{ player.id }}" min="1" max="10" 
-           value="{{ votes_dict|get_item:player.id|default:'' }}">
-  {% endfor %}
-  <button type="submit">Enviar votos</button>
-</form> -->
+</body>
+</html>

@@ -1,28 +1,128 @@
-{% if user.is_authenticated %}
-  Olá, {{ user.username }}! | <form action="{% url 'logout' %}" method="post" style="display:inline;">
-  {% csrf_token %}
-  <button type="submit" style="background:none; border:none; padding:0; cursor:pointer; color:blue; text-decoration:underline;">
-    Sair
-  </button>
-</form>
- | <a href="{% url 'vote' %}">Votar</a>
-{% else %}
-  <a href="{% url 'login' %}">Entrar</a> | <a href="{% url 'signup' %}">Cadastrar</a>
-{% endif %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciamento de Jogadores</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .card-shadow { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-hover:hover { transform: translateY(-1px); transition: all 0.2s ease; }
+        .player-row:hover { background-color: #f8fafc; transition: all 0.2s ease; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
 
-<h1>Jogadores cadastrados</h1>
-<ul>
-  {% for player in players %}
-    <li>{{ player.name }} - Média: {{ player.average_score|floatformat:2 }}</li>
-  {% empty %}
-    <li>Nenhum jogador cadastrado.</li>
-  {% endfor %}
-</ul>
+    <!-- Navbar -->
+    {% include 'players/navbar.html' %}
 
-{% if user.admin %}
-<a href="{% url 'add_player' %}">Adicionar jogador</a> |
-{% endif %}
-{% if user.is_authenticated %}
-<a href="{% url 'vote' %}">Votar</a> |
-{% endif %}
-<a href="{% url 'teams' %}">Ver times</a>
+    <div class="max-w-6xl mx-auto px-4 py-8 pt-20">
+
+        <!-- Botões de Participar/Sair e Adicionar -->
+        {% if user.is_authenticated %}
+        <div class="flex gap-3 mb-6">
+            <a href="{% url 'join_game' %}" class="btn-hover bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded flex items-center gap-2 card-shadow">
+                <i class="fas fa-check"></i> Participar
+            </a>
+            {% if show_leave %}
+            <a href="{% url 'leave_game' %}" class="btn-hover bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded flex items-center gap-2 card-shadow">
+                <i class="fas fa-times"></i> Sair
+            </a>
+            {% endif %}
+            {% if user.is_superuser %}
+            <a href="{% url 'admin_add_player' %}" class="btn-hover bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded flex items-center gap-2 card-shadow">
+                <i class="fas fa-user-plus"></i> Adicionar outro jogador
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Lista Principal -->
+        <div class="bg-white rounded-lg card-shadow mb-8 overflow-hidden">
+            <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                    <i class="fas fa-users text-gray-600"></i> Lista Principal (até 20 jogadores)
+                </h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Nome</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Média de Votos</th>
+                            {% if user.is_superuser %}
+                            <th class="px-6 py-3 text-center text-sm font-medium text-gray-700">Ações</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        {% for player in main_players %}
+                        <tr class="player-row">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-gray-900 font-medium">{{ player.name }}</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {% if show_scores %}
+                                    <span class="text-gray-900 font-semibold">{{ player.average_score|floatformat:2 }}</span>
+                                {% else %}
+                                    <span class="text-gray-400 italic">Liberado na terça 20h</span>
+                                {% endif %}
+                            </td>
+                            {% if user.is_superuser %}
+                            <td class="px-6 py-4 text-center">
+                                <a href="{% url 'admin_remove_player' player.id %}" 
+                                   class="text-red-600 hover:text-red-800 font-bold">X</a>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="{% if user.is_superuser %}3{% else %}2{% endif %}" class="px-6 py-4 text-center text-gray-500">Nenhum jogador ainda.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Fila de Espera -->
+        <div class="bg-white rounded-lg card-shadow overflow-hidden">
+            <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                    <i class="fas fa-clock text-gray-600"></i> Fila de Espera
+                </h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Posição</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Nome</th>
+                            {% if user.is_superuser %}
+                            <th class="px-6 py-3 text-center text-sm font-medium text-gray-700">Ações</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        {% for player in waiting_players %}
+                        <tr class="player-row">
+                            <td class="px-6 py-4 whitespace-nowrap">{{ player.queue_position }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap">{{ player.name }}</td>
+                            {% if user.is_superuser %}
+                            <td class="px-6 py-4 text-center">
+                                <a href="{% url 'admin_remove_player' player.id %}" 
+                                   class="text-red-600 hover:text-red-800 font-bold">X</a>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="{% if user.is_superuser %}3{% else %}2{% endif %}" class="px-6 py-4 text-center text-gray-500">Ninguém na fila de espera.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
