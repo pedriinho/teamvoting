@@ -18,7 +18,7 @@ ERROR_TRANSLATIONS = {
 def is_after_tuesday_20h():
     tz = pytz.timezone("America/Sao_Paulo")
     now = datetime.datetime.now(tz)
-    return now.weekday() == 0 and now.hour >= 20
+    return now.weekday() == 1 and now.hour >= 20
 
 def home(request):
     main_players = Player.objects.filter(is_main=True).order_by('id')
@@ -26,6 +26,7 @@ def home(request):
     is_main_player = main_players.filter(name=request.user.username).exists() if request.user.is_authenticated else False
     show_scores = is_after_tuesday_20h()
     show_leave = False
+    value_racha = 210
     if request.user.is_authenticated:
         show_leave = Player.objects.filter(
             name=request.user.username,
@@ -34,12 +35,16 @@ def home(request):
             name=request.user.username,
             is_main=False
         ).exists()
+    if main_players.count() > 0:
+        value_racha = round(210/main_players.count(), 2)
     return render(request, 'players/home.html', {
         'main_players': main_players,
         'waiting_players': waiting_players,
         'is_main_player': is_main_player,
         'show_scores': show_scores,
         'show_leave': show_leave,
+	'qtd_main': main_players.count(),
+	'value_racha': value_racha,
     })
 
 @login_required
