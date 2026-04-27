@@ -10,4 +10,6 @@ urlpatterns = [
     path('signup/', views.signup, name='signup'),
     path('admin-add-player/', views.admin_add_player, name='admin_add_player'),
     path('admin-remove-player/<int:player_id>/', views.admin_remove_player, name='admin_remove_player'),
+    path('update-main-limit/', views.admin_update_main_limit, name='admin_update_main_limit'),
+    path('clear-players/', views.admin_clear_players, name='admin_clear_players'),
 ]

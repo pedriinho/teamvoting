@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -30,3 +32,18 @@ class Vote(models.Model):
 
     def __str__(self):
         return f'{self.voter.username} votou {self.score} para {self.player.name}'
+
+class GameConfig(models.Model):
+    main_players_limit = models.PositiveIntegerField(default=20)
+    racha_value = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("210.00"))
+
+    def save(self, *args, **kwargs):
+        if self.main_players_limit not in [15, 20]:
+            self.main_players_limit = 20
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        config, _ = cls.objects.get_or_create(pk=1)
+        return config

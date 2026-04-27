@@ -35,6 +35,52 @@
             <a href="{% url 'admin_add_player' %}" class="btn-hover bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-2 rounded flex items-center gap-2 card-shadow">
                 <i class="fas fa-user-plus"></i> Adicionar outro jogador
             </a>
+
+            <form method="post" action="{% url 'admin_update_main_limit' %}" class="flex items-center gap-3 bg-white px-4 py-2 rounded card-shadow">
+                {% csrf_token %}
+
+                <div class="flex items-center gap-2">
+                    <label for="main_players_limit" class="text-sm font-medium text-gray-700">
+                        Limite:
+                    </label>
+                    <select name="main_players_limit" id="main_players_limit" class="border border-gray-300 rounded px-3 py-1 text-sm">
+                        <option value="15" {% if main_players_limit == 15 %}selected{% endif %}>15 jogadores</option>
+                        <option value="20" {% if main_players_limit == 20 %}selected{% endif %}>20 jogadores</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <label for="racha_value" class="text-sm font-medium text-gray-700">
+                        Racha:
+                    </label>
+                    <input 
+                        type="number"
+                        name="racha_value"
+                        id="racha_value"
+                        min="0.01"
+                        step="0.01"
+                        value="{{ racha_total_input }}"
+                        class="border border-gray-300 rounded px-3 py-1 text-sm w-28"
+                    >
+                </div>
+
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded text-sm">
+                    Salvar
+                </button>
+            </form>
+            <form 
+                method="post" 
+                action="{% url 'admin_clear_players' %}" 
+                onsubmit="return confirm('Tem certeza que deseja remover todos os jogadores das duas listas? Essa ação não pode ser desfeita.');"
+            >
+                {% csrf_token %}
+                <button 
+                    type="submit" 
+                    class="btn-hover bg-red-700 hover:bg-red-800 text-white px-6 py-2 rounded flex items-center gap-2 card-shadow"
+                >
+                    <i class="fas fa-trash"></i> Limpar listas
+                </button>
+            </form>
             {% endif %}
         </div>
         {% endif %}
@@ -43,7 +89,7 @@
         <div class="bg-white rounded-lg card-shadow mb-8 overflow-hidden">
             <div class="bg-gray-50 px-6 py-4 border-b border-gray-200">
                 <h2 class="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                    <i class="fas fa-users text-gray-600"></i> Lista Principal ({{ qtd_main }}/20) | {{ value_racha}} Reais
+                    <i class="fas fa-users text-gray-600"></i> Lista Principal ({{ qtd_main }}/{{ main_players_limit }}) | R$ {{ value_racha }} por pessoa
                 </h2>
             </div>
             <div class="overflow-x-auto">
