@@ -31,7 +31,7 @@
     <!-- Navbar -->
     {% include 'players/navbar.html' %}
 
-    <div class="max-w-6xl mx-auto px-4 py-8 pt-20">
+    <div class="max-w-6xl mx-auto px-4 py-6 sm:py-8">
 
         {% if messages %}
         <div class="flex flex-col gap-2 mb-6">
@@ -45,7 +45,7 @@
 
         <!-- Botões de Participar/Sair e Adicionar -->
         {% if user.is_authenticated %}
-        <div class="flex gap-3 mb-6">
+        <div class="flex flex-wrap gap-3 mb-6">
             {% if is_player %}
             <a href="{% url 'leave_game' %}" class="btn-hover bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded flex items-center gap-2 card-shadow">
                 <i class="fas fa-times"></i> Sair
@@ -79,8 +79,8 @@
 
         <!-- Jogadores -->
         <div class="bg-white dark:bg-gray-800 rounded-lg card-shadow mb-8 overflow-hidden transition-colors">
-            <div class="bg-gray-50 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
-                <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <div class="bg-gray-50 dark:bg-gray-700 px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+                <h2 class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 flex flex-wrap items-center gap-x-2">
                     <i class="fas fa-users text-gray-600 dark:text-gray-300"></i> Jogadores ({{ player_count }})
                 </h2>
             </div>
@@ -88,20 +88,20 @@
                 <table class="w-full">
                     <thead class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                         <tr>
-                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Nome</th>
-                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Posição</th>
+                            <th class="px-4 sm:px-6 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Nome</th>
+                            <th class="px-4 sm:px-6 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Posição</th>
                             {% if user.is_superuser %}
-                            <th class="px-6 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">Ações</th>
+                            <th class="px-4 sm:px-6 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">Ações</th>
                             {% endif %}
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         {% for player in players %}
                         <tr class="player-row">
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
                                 <span class="text-gray-900 dark:text-gray-100 font-medium">{{ player.name }}</span>
                             </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
+                            <td class="px-4 sm:px-6 py-4 whitespace-nowrap">
                                 {% if show_scores %}
                                     {% if player.avg_rank %}
                                         <span class="text-gray-900 dark:text-gray-100 font-semibold">{{ player.position }}º</span>
@@ -114,7 +114,7 @@
                                 {% endif %}
                             </td>
                             {% if user.is_superuser %}
-                            <td class="px-6 py-4 text-center">
+                            <td class="px-4 sm:px-6 py-4 text-center">
                                 <a href="{% url 'admin_remove_player' player.id %}"
                                    class="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-bold">X</a>
                             </td>
