@@ -131,6 +131,26 @@ class VoteViewTests(TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
+    def test_small_lists_start_on_the_drag_list(self):
+        response = self.client.get(reverse('vote'))
+
+        self.assertFalse(response.context['start_with_duels'])
+
+    def test_long_lists_start_on_duels(self):
+        make_players(*[f'jogador{i}' for i in range(12)])
+
+        response = self.client.get(reverse('vote'))
+
+        self.assertTrue(response.context['start_with_duels'])
+
+    def test_a_saved_ballot_always_opens_on_the_list(self):
+        make_players(*[f'jogador{i}' for i in range(12)])
+        cast_ballot(self.voter, list(Player.objects.exclude(user=self.voter)))
+
+        response = self.client.get(reverse('vote'))
+
+        self.assertFalse(response.context['start_with_duels'])
+
     def test_page_lists_the_other_main_players(self):
         response = self.client.get(reverse('vote'))
 

@@ -47,7 +47,8 @@
       {% endif %}
 
       {% if players %}
-      <form method="post" id="formVotacao" class="flex flex-col">
+      <form method="post" id="formVotacao" class="flex flex-col"
+            data-duelos-primeiro="{% if start_with_duels %}1{% else %}0{% endif %}">
         {% csrf_token %}
         <input type="hidden" name="order" id="campoOrdem">
 
@@ -296,6 +297,10 @@
           }
 
           document.getElementById('botaoIniciarDuelos').addEventListener('click', iniciarDuelos);
+
+          if (document.getElementById('formVotacao').dataset.duelosPrimeiro === '1') {
+              iniciarDuelos();
+          }
           document.getElementById('botaoCancelarDuelos').addEventListener('click', function () {
               terminarDuelos(false);
           });

@@ -13,6 +13,9 @@ from .decorators import teams_released_only, vote_open_only
 from .models import GameConfig, Player, RoundResult, Vote
 from .utils import archive_closed_round, are_teams_available, current_round_date, rank_players
 
+# Acima disso, ordenar arrastando fica cansativo e a votação começa em duelos.
+DUELS_THRESHOLD = 10
+
 ERROR_TRANSLATIONS = {
     "A user with that username already exists.": "Já existe um usuário com esse nome.",
     "This password is too short. It must contain at least 8 characters.": "A senha é muito curta. Deve ter pelo menos 8 caracteres.",
@@ -133,6 +136,7 @@ def vote(request):
     return render(request, 'players/vote.html', {
         'players': players,
         'has_saved_vote': bool(existing_ranks),
+        'start_with_duels': not existing_ranks and len(players) > DUELS_THRESHOLD,
     })
 
 
