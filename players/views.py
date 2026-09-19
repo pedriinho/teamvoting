@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import redirect, render, get_object_or_404
+from django.views.decorators.http import require_POST
 
 from .decorators import only_tuesday_evening, vote_open_only
 from .models import GameConfig, Player, RoundResult, Vote
@@ -241,6 +242,7 @@ def admin_add_player(request):
     return render(request, 'players/admin_add_player.html', {'users_to_add': users_to_add})
 
 
+@require_POST
 @user_passes_test(lambda u: u.is_superuser)
 def admin_remove_player(request, player_id):
     player = get_object_or_404(Player, id=player_id)

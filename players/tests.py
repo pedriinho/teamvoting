@@ -450,3 +450,24 @@ class PlayerUserLinkTests(TestCase):
         user.delete()
 
         self.assertEqual(Player.objects.count(), 0)
+
+
+class AdminRemovePlayerTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            'chefe', 'chefe@exemplo.com', CREDENCIAL_DE_TESTE
+        )
+        self.client.force_login(self.admin)
+        (self.ana,) = make_players('ana')
+
+    def test_get_does_not_remove(self):
+        response = self.client.get(reverse('admin_remove_player', args=[self.ana.id]))
+
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(Player.objects.filter(id=self.ana.id).exists())
+
+    def test_post_removes(self):
+        response = self.client.post(reverse('admin_remove_player', args=[self.ana.id]))
+
+        self.assertRedirects(response, reverse('home'))
+        self.assertFalse(Player.objects.filter(id=self.ana.id).exists())
