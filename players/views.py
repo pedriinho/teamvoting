@@ -1,5 +1,4 @@
 import datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -11,7 +10,7 @@ from django.shortcuts import redirect, render, get_object_or_404
 
 from .decorators import only_tuesday_evening, vote_open_only
 from .models import GameConfig, Player, RoundResult, Vote
-from .utils import archive_closed_round, are_teams_available, rank_main_players
+from .utils import archive_closed_round, are_teams_available, rank_players
 
 ERROR_TRANSLATIONS = {
     "A user with that username already exists.": "Já existe um usuário com esse nome.",
@@ -19,17 +18,6 @@ ERROR_TRANSLATIONS = {
     "The two password fields didn’t match.": "As senhas não coincidem.",
     "This field is required.": "Este campo é obrigatório.",
 }
-
-
-def get_main_players_limit():
-    return GameConfig.load().main_players_limit
-
-
-def reorder_waiting_list():
-    waiting_list = Player.objects.filter(is_main=False).order_by('queue_position', 'id')
-    for i, player in enumerate(waiting_list, start=1):
-        player.queue_position = i
-        player.save()
 
 
 def compact_vote_ranks():
@@ -50,94 +38,28 @@ def compact_vote_ranks():
             ])
 
 
-def rebalance_players():
-    limit = get_main_players_limit()
-    main_players = Player.objects.filter(is_main=True).order_by('id')
-    main_count = main_players.count()
-
-    if main_count > limit:
-        players_to_wait = main_players[limit:]
-        last_position = Player.objects.filter(is_main=False).count()
-
-        for player in players_to_wait:
-            last_position += 1
-            player.is_main = False
-            player.queue_position = last_position
-            player.save()
-
-    elif main_count < limit:
-        available_slots = limit - main_count
-        waiting_players = Player.objects.filter(is_main=False).order_by('queue_position', 'id')[:available_slots]
-
-        for player in waiting_players:
-            player.is_main = True
-            player.queue_position = None
-            player.save()
-
-    reorder_waiting_list()
-
-
 def home(request):
-    rebalance_players()
-
     config = GameConfig.load()
     archive_closed_round(config)
-    main_players_limit = config.main_players_limit
-    racha_total = config.racha_value
 
-    main_players_qs = Player.objects.filter(is_main=True)
-    waiting_players = Player.objects.filter(is_main=False).order_by('queue_position')
-    is_main_player = (
-        main_players_qs.filter(name=request.user.username).exists()
-        if request.user.is_authenticated
-        else False
-    )
     show_scores = are_teams_available()
-    show_leave = False
-    value_racha = racha_total
-    hide_racha_value = config.hide_racha_value
 
     if show_scores:
-        main_players = rank_main_players(main_players_qs)
+        players = rank_players()
     else:
-        main_players = list(main_players_qs.order_by('id'))
-
-    if request.user.is_authenticated:
-        show_leave = Player.objects.filter(name=request.user.username).exists()
-
-    qtd_main = len(main_players)
-
-    if qtd_main > 0:
-        value_racha = (racha_total / Decimal(qtd_main)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        players = list(Player.objects.order_by('id'))
 
     return render(request, 'players/home.html', {
-        'main_players': main_players,
-        'waiting_players': waiting_players,
-        'is_main_player': is_main_player,
+        'players': players,
         'show_scores': show_scores,
-        'show_leave': show_leave,
-        'qtd_main': qtd_main,
-        'value_racha': value_racha,
-        'racha_total': racha_total,
-        'racha_total_input': str(racha_total),
-        'main_players_limit': main_players_limit,
-        'hide_racha_value': hide_racha_value,
+        'player_count': len(players),
     })
 
 
 @login_required
 def join_game(request):
-    if Player.objects.filter(name=request.user.username).exists():
-        return redirect('home')
-
-    main_players_limit = get_main_players_limit()
-    main_count = Player.objects.filter(is_main=True).count()
-
-    if main_count < main_players_limit:
-        Player.objects.create(name=request.user.username, is_main=True)
-    else:
-        last_position = Player.objects.filter(is_main=False).count()
-        Player.objects.create(name=request.user.username, is_main=False, queue_position=last_position + 1)
+    if not Player.objects.filter(name=request.user.username).exists():
+        Player.objects.create(name=request.user.username)
 
     return redirect('home')
 
@@ -151,7 +73,6 @@ def leave_game(request):
 
     player.delete()
     compact_vote_ranks()
-    rebalance_players()
 
     return redirect('home')
 
@@ -159,8 +80,7 @@ def leave_game(request):
 @login_required
 @vote_open_only
 def vote(request):
-    is_main_player = Player.objects.filter(name=request.user.username, is_main=True).exists()
-    players = list(Player.objects.filter(is_main=True).exclude(name=request.user.username))
+    players = list(Player.objects.exclude(name=request.user.username))
     player_ids = {player.id for player in players}
 
     if request.method == 'POST':
@@ -198,7 +118,6 @@ def vote(request):
     return render(request, 'players/vote.html', {
         'players': players,
         'has_saved_vote': bool(existing_ranks),
-        'is_main_player': is_main_player,
     })
 
 
@@ -206,7 +125,7 @@ def vote(request):
 def teams(request):
     archive_closed_round()
 
-    players = rank_main_players()
+    players = rank_players()
     total_players = len(players)
     max_team_size = GameConfig.load().players_per_team
     num_teams = (total_players + max_team_size - 1) // max_team_size
@@ -251,8 +170,8 @@ def account(request):
 
     current = None
 
-    if player and player.is_main and are_teams_available():
-        ranked = rank_main_players()
+    if player and are_teams_available():
+        ranked = rank_players()
         current = next((p for p in ranked if p.id == player.id), None)
 
         if current is not None:
@@ -300,16 +219,8 @@ def admin_add_player(request):
         username = request.POST.get('username')
 
         if username:
-            main_players_limit = get_main_players_limit()
-            main_count = Player.objects.filter(is_main=True).count()
-
-            if main_count < main_players_limit:
-                Player.objects.create(name=username, is_main=True)
-                messages.success(request, f'Usuário {username} adicionado como player principal!')
-            else:
-                last_position = Player.objects.filter(is_main=False).count()
-                Player.objects.create(name=username, is_main=False, queue_position=last_position + 1)
-                messages.success(request, f'Usuário {username} adicionado na fila de espera!')
+            Player.objects.create(name=username)
+            messages.success(request, f'Usuário {username} adicionado!')
 
             return redirect('home')
 
@@ -325,7 +236,6 @@ def admin_remove_player(request, player_id):
 
     player.delete()
     compact_vote_ranks()
-    rebalance_players()
 
     return redirect('home')
 
@@ -341,22 +251,6 @@ def admin_update_settings(request):
             messages.error(request, 'Quantidade de jogadores por time inválida.')
             return redirect('/')
 
-        try:
-            main_players_limit = int(request.POST.get('main_players_limit', ''))
-        except (TypeError, ValueError):
-            messages.error(request, 'Quantidade máxima da lista principal inválida.')
-            return redirect('/')
-
-        racha_value_raw = request.POST.get('racha_value', '').replace(',', '.')
-
-        try:
-            parsed_racha_value = Decimal(racha_value_raw).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        except InvalidOperation:
-            messages.error(request, 'Valor do racha inválido.')
-            return redirect('/')
-
-        hide_racha_value = request.POST.get('hide_racha_value') == 'on'
-
         vote_day = request.POST.get('vote_day')
         vote_start_time = request.POST.get('vote_start_time')
         vote_end_time = request.POST.get('vote_end_time')
@@ -369,9 +263,6 @@ def admin_update_settings(request):
             return redirect('/')
 
         config.players_per_team = players_per_team
-        config.main_players_limit = main_players_limit
-        config.racha_value = parsed_racha_value
-        config.hide_racha_value = hide_racha_value
         config.vote_day = vote_day
         config.vote_start_time = parsed_start_time
         config.vote_end_time = parsed_end_time
@@ -384,7 +275,6 @@ def admin_update_settings(request):
                     messages.error(request, error)
             return redirect('/')
 
-        rebalance_players()
         messages.success(request, 'Configurações atualizadas com sucesso.')
 
     return redirect('/')

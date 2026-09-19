@@ -34,14 +34,14 @@ def are_teams_available(config=None):
     return not is_voting_open(config)
 
 
-def rank_main_players(players=None):
+def rank_players(players=None):
     """
-    Classifica os jogadores principais do mais forte para o mais fraco,
-    anexando avg_rank (média das posições recebidas) e position (1 = mais
-    forte, com empates compartilhando a posição) a cada um.
+    Classifica os jogadores do mais forte para o mais fraco, anexando
+    avg_rank (média das posições recebidas) e position (1 = mais forte, com
+    empates compartilhando a posição) a cada um.
     """
     if players is None:
-        players = Player.objects.filter(is_main=True)
+        players = Player.objects.all()
 
     players = list(players)
 
@@ -93,7 +93,7 @@ def archive_closed_round(config=None):
     if not Vote.objects.exists():
         return None
 
-    ranked = rank_main_players()
+    ranked = rank_players()
 
     if not ranked:
         return None

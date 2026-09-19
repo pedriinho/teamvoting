@@ -6,14 +6,14 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .models import GameConfig, Player, RoundResult, Vote, VotingRound
-from .utils import TIMEZONE, archive_closed_round, rank_main_players
+from .utils import TIMEZONE, archive_closed_round, rank_players
 from .views import compact_vote_ranks
 
 CREDENCIAL_DE_TESTE = 'racha-1234'
 
 
 def make_players(*names):
-    return [Player.objects.create(name=name, is_main=True) for name in names]
+    return [Player.objects.create(name=name) for name in names]
 
 
 def cast_ballot(voter, ordered_players):
@@ -21,7 +21,7 @@ def cast_ballot(voter, ordered_players):
         Vote.objects.create(player=player, voter=voter, rank=position)
 
 
-class RankMainPlayersTests(TestCase):
+class RankPlayersTests(TestCase):
     def test_orders_by_average_received_rank(self):
         ana, bruno, caio = make_players('ana', 'bruno', 'caio')
         voter_one = User.objects.create_user('voter_one', password=CREDENCIAL_DE_TESTE)
@@ -30,7 +30,7 @@ class RankMainPlayersTests(TestCase):
         cast_ballot(voter_one, [caio, ana, bruno])
         cast_ballot(voter_two, [caio, bruno, ana])
 
-        ranked = rank_main_players()
+        ranked = rank_players()
 
         self.assertEqual([p.name for p in ranked], ['caio', 'ana', 'bruno'])
         self.assertEqual([p.position for p in ranked], [1, 2, 2])
@@ -50,7 +50,7 @@ class RankMainPlayersTests(TestCase):
         Vote.objects.create(player=ana, voter=other, rank=2)
         Vote.objects.create(player=caio, voter=other, rank=3)
 
-        ranked = rank_main_players()
+        ranked = rank_players()
 
         self.assertEqual(
             [(p.name, p.position) for p in ranked],
@@ -63,7 +63,7 @@ class RankMainPlayersTests(TestCase):
 
         Vote.objects.create(player=bruno, voter=voter, rank=5)
 
-        ranked = rank_main_players()
+        ranked = rank_players()
 
         self.assertEqual([p.name for p in ranked], ['bruno', 'ana'])
         self.assertIsNone(ranked[1].avg_rank)
@@ -87,7 +87,7 @@ class CompactVoteRanksTests(TestCase):
 class VoteViewTests(TestCase):
     def setUp(self):
         self.voter = User.objects.create_user('ana', password=CREDENCIAL_DE_TESTE)
-        self.ana = Player.objects.create(name='ana', is_main=True)
+        self.ana = Player.objects.create(name='ana')
         self.bruno, self.caio = make_players('bruno', 'caio')
         self.client.force_login(self.voter)
 
@@ -231,6 +231,7 @@ class ArchiveClosedRoundTests(TestCase):
 
         self.assertEqual(RoundResult.objects.filter(player_name='bruno').count(), 1)
 
+
 class AccountViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user('ana', password=CREDENCIAL_DE_TESTE)
@@ -269,8 +270,8 @@ class AccountViewTests(TestCase):
         self.assertContains(response, '3º de 10')
 
     def test_current_position_appears_when_voting_is_closed(self):
-        ana = Player.objects.create(name='ana', is_main=True)
-        bruno = Player.objects.create(name='bruno', is_main=True)
+        ana = Player.objects.create(name='ana')
+        bruno = Player.objects.create(name='bruno')
         voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
         cast_ballot(voter, [bruno, ana])
 
@@ -287,3 +288,61 @@ class AccountViewTests(TestCase):
         self.assertIsNone(response.context['player'])
         self.assertIsNone(response.context['best_position'])
         self.assertEqual(response.context['history'], [])
+
+
+class JoinGameTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('ana', password=CREDENCIAL_DE_TESTE)
+        self.client.force_login(self.user)
+
+    def test_everyone_who_joins_plays(self):
+        make_players(*[f'jogador{i}' for i in range(30)])
+
+        response = self.client.post(reverse('join_game'))
+
+        self.assertRedirects(response, reverse('home'))
+        self.assertTrue(Player.objects.filter(name='ana').exists())
+        self.assertEqual(Player.objects.count(), 31)
+
+    def test_joining_twice_does_not_duplicate(self):
+        self.client.post(reverse('join_game'))
+        self.client.post(reverse('join_game'))
+
+        self.assertEqual(Player.objects.filter(name='ana').count(), 1)
+
+    def test_leaving_removes_the_player_and_the_votes(self):
+        ana, bruno = make_players('ana', 'bruno')
+        voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
+        cast_ballot(voter, [ana, bruno])
+
+        response = self.client.post(reverse('leave_game'))
+
+        self.assertRedirects(response, reverse('home'))
+        self.assertFalse(Player.objects.filter(name='ana').exists())
+        self.assertEqual(
+            [(v.player.name, v.rank) for v in Vote.objects.all()],
+            [('bruno', 1)],
+        )
+
+
+class HomeViewTests(TestCase):
+    def test_lists_every_player_with_the_ranking_once_voting_closed(self):
+        players = make_players('ana', 'bruno', 'caio')
+        voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
+        cast_ballot(voter, [players[2], players[0], players[1]])
+
+        with patch('players.views.are_teams_available', return_value=True):
+            response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['player_count'], 3)
+        self.assertEqual([p.name for p in response.context['players']], ['caio', 'ana', 'bruno'])
+
+    def test_ranking_is_hidden_while_voting_is_open(self):
+        make_players('ana', 'bruno')
+
+        with patch('players.views.are_teams_available', return_value=False):
+            response = self.client.get(reverse('home'))
+
+        self.assertFalse(response.context['show_scores'])
+        self.assertContains(response, 'Liberado após o encerramento da votação')

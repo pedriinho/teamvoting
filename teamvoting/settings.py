@@ -64,6 +64,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'players.context_processors.game_config',
+                'players.context_processors.player_status',
             ],
         },
     },
