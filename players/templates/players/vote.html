@@ -1,4 +1,3 @@
-{% load custom_filters %}
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -27,29 +26,286 @@
   <!-- Conteúdo centralizado abaixo da navbar -->
   <div class="flex-grow flex justify-center pt-20 px-4">
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 w-full max-w-md transition-colors">
-      <h1 class="text-2xl font-bold text-center mb-6 text-gray-800 dark:text-gray-100">Votação</h1>
-      
-      <form method="post" class="flex flex-col">
-        {% csrf_token %}
-        {% for player in players %}
-          <div class="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
-            <label class="font-medium text-gray-700 dark:text-gray-300">{{ player.name }}</label>
-            <input type="number" name="score_{{ player.id }}" min="1" max="10" 
-                   value="{{ votes_dict|get_item:player.id|default:'' }}" 
-                   class="w-16 text-center border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:ring-2 focus:ring-blue-400 focus:outline-none" required>
-          </div>
+      <h1 class="text-2xl font-bold text-center mb-2 text-gray-800 dark:text-gray-100">Votação</h1>
+      <p class="text-center text-sm text-gray-600 dark:text-gray-400 mb-4">
+        Coloque os jogadores em ordem de força: a 1ª posição é a do mais forte.
+      </p>
+
+      {% if messages %}
+        {% for message in messages %}
+        <div class="rounded px-4 py-3 mb-4 text-sm bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+          {{ message }}
+        </div>
         {% endfor %}
-        
-        <button type="submit" class="mt-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition">
-          Enviar votos
-        </button>
+      {% endif %}
+
+      {% if has_saved_vote %}
+      <p class="rounded px-4 py-3 mb-4 text-sm bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+        Sua ordenação anterior já está carregada. Envie de novo para atualizá-la.
+      </p>
+      {% endif %}
+
+      {% if players %}
+      <form method="post" id="formVotacao" class="flex flex-col">
+        {% csrf_token %}
+        <input type="hidden" name="order" id="campoOrdem">
+
+        <div id="modoLista">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Arraste ou use as setas
+            </span>
+            <button type="button" id="botaoIniciarDuelos"
+                    class="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+              <i class="fas fa-code-branch"></i> Escolher por duelos
+            </button>
+          </div>
+
+          <ul id="listaJogadores" class="flex flex-col gap-1 select-none">
+            {% for player in players %}
+            <li data-player-id="{{ player.id }}"
+                class="flex items-center gap-2 py-2 px-2 rounded bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700">
+              <span data-posicao class="w-6 shrink-0 text-center text-sm font-bold text-gray-500 dark:text-gray-400"></span>
+              <span data-nome class="flex-grow min-w-0 truncate font-medium text-gray-700 dark:text-gray-200">{{ player.name }}</span>
+              <button type="button" data-mover="cima" title="Subir"
+                      class="shrink-0 w-8 h-8 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600">
+                <i class="fas fa-chevron-up"></i>
+              </button>
+              <button type="button" data-mover="baixo" title="Descer"
+                      class="shrink-0 w-8 h-8 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600">
+                <i class="fas fa-chevron-down"></i>
+              </button>
+              <span data-alca title="Arrastar"
+                    class="shrink-0 w-8 h-8 flex items-center justify-center cursor-grab touch-none text-gray-400 dark:text-gray-500">
+                <i class="fas fa-grip-lines"></i>
+              </span>
+            </li>
+            {% endfor %}
+          </ul>
+
+          <button type="submit" class="mt-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition">
+            Enviar votos
+          </button>
+        </div>
+
+        <div id="modoDuelos" class="hidden flex-col items-center">
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">Quem é mais forte?</p>
+          <p id="progressoDuelos" class="text-xs text-gray-500 dark:text-gray-500 mb-4"></p>
+
+          <div class="flex items-stretch gap-3 w-full">
+            <button type="button" data-duelo="esquerda"
+                    class="flex-1 min-w-0 px-3 py-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold break-words">
+            </button>
+            <span class="self-center text-sm text-gray-500 dark:text-gray-400">vs</span>
+            <button type="button" data-duelo="direita"
+                    class="flex-1 min-w-0 px-3 py-6 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold break-words">
+            </button>
+          </div>
+
+          <button type="button" id="botaoCancelarDuelos"
+                  class="mt-4 text-sm text-gray-600 dark:text-gray-400 hover:underline">
+            Cancelar duelos e voltar para a lista
+          </button>
+        </div>
       </form>
+      {% else %}
+      <p class="text-center text-gray-500 dark:text-gray-400">
+        Não há outros jogadores na lista principal para ordenar.
+      </p>
+      {% endif %}
 
       <a href="{% url 'home' %}" class="block text-center mt-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition">
         Voltar
       </a>
     </div>
   </div>
+
+  <script>
+      (function () {
+          var lista = document.getElementById('listaJogadores');
+          if (!lista) {
+              return;
+          }
+
+          var campoOrdem = document.getElementById('campoOrdem');
+          var modoLista = document.getElementById('modoLista');
+          var modoDuelos = document.getElementById('modoDuelos');
+          var progresso = document.getElementById('progressoDuelos');
+          var botaoEsquerda = modoDuelos.querySelector('[data-duelo="esquerda"]');
+          var botaoDireita = modoDuelos.querySelector('[data-duelo="direita"]');
+
+          function linhas() {
+              return Array.prototype.slice.call(lista.children);
+          }
+
+          function renumerar() {
+              var atuais = linhas();
+              atuais.forEach(function (linha, indice) {
+                  linha.querySelector('[data-posicao]').textContent = (indice + 1) + 'º';
+              });
+              campoOrdem.value = atuais.map(function (linha) {
+                  return linha.dataset.playerId;
+              }).join(',');
+          }
+
+          renumerar();
+
+          lista.addEventListener('click', function (evento) {
+              var botao = evento.target.closest('[data-mover]');
+              if (!botao) {
+                  return;
+              }
+
+              var linha = botao.closest('[data-player-id]');
+
+              if (botao.dataset.mover === 'cima' && linha.previousElementSibling) {
+                  linha.previousElementSibling.before(linha);
+              } else if (botao.dataset.mover === 'baixo' && linha.nextElementSibling) {
+                  linha.nextElementSibling.after(linha);
+              }
+
+              renumerar();
+          });
+
+          var arrastando = null;
+
+          lista.addEventListener('pointerdown', function (evento) {
+              var alca = evento.target.closest('[data-alca]');
+              if (!alca) {
+                  return;
+              }
+
+              arrastando = alca.closest('[data-player-id]');
+              arrastando.classList.add('opacity-60', 'ring-2', 'ring-blue-400');
+              alca.setPointerCapture(evento.pointerId);
+              evento.preventDefault();
+          });
+
+          lista.addEventListener('pointermove', function (evento) {
+              if (!arrastando) {
+                  return;
+              }
+
+              evento.preventDefault();
+
+              var sobre = document.elementFromPoint(evento.clientX, evento.clientY);
+              var destino = sobre && sobre.closest('[data-player-id]');
+
+              if (!destino || destino === arrastando || destino.parentElement !== lista) {
+                  return;
+              }
+
+              var area = destino.getBoundingClientRect();
+
+              if (evento.clientY > area.top + area.height / 2) {
+                  destino.after(arrastando);
+              } else {
+                  destino.before(arrastando);
+              }
+
+              renumerar();
+          });
+
+          function encerrarArraste() {
+              if (!arrastando) {
+                  return;
+              }
+
+              arrastando.classList.remove('opacity-60', 'ring-2', 'ring-blue-400');
+              arrastando = null;
+              renumerar();
+          }
+
+          lista.addEventListener('pointerup', encerrarArraste);
+          lista.addEventListener('pointercancel', encerrarArraste);
+
+          var ordenados = [];
+          var restantes = [];
+          var inicio = 0;
+          var fim = 0;
+          var duelosFeitos = 0;
+
+          function nome(linha) {
+              return linha.querySelector('[data-nome]').textContent.trim();
+          }
+
+          function iniciarDuelos() {
+              var atuais = linhas();
+
+              ordenados = atuais.slice(0, 1);
+              restantes = atuais.slice(1);
+              duelosFeitos = 0;
+
+              modoLista.classList.add('hidden');
+              modoDuelos.classList.remove('hidden');
+              modoDuelos.classList.add('flex');
+
+              proximoCandidato();
+          }
+
+          function terminarDuelos(aplicar) {
+              if (aplicar) {
+                  ordenados.forEach(function (linha) {
+                      lista.appendChild(linha);
+                  });
+                  renumerar();
+              }
+
+              modoDuelos.classList.add('hidden');
+              modoDuelos.classList.remove('flex');
+              modoLista.classList.remove('hidden');
+          }
+
+          function proximoCandidato() {
+              if (!restantes.length) {
+                  terminarDuelos(true);
+                  return;
+              }
+
+              inicio = 0;
+              fim = ordenados.length;
+              mostrarDuelo();
+          }
+
+          function mostrarDuelo() {
+              if (inicio >= fim) {
+                  ordenados.splice(inicio, 0, restantes.shift());
+                  proximoCandidato();
+                  return;
+              }
+
+              var meio = Math.floor((inicio + fim) / 2);
+
+              botaoEsquerda.textContent = nome(restantes[0]);
+              botaoDireita.textContent = nome(ordenados[meio]);
+              progresso.textContent = 'Duelo ' + (duelosFeitos + 1) + ', faltam ' + restantes.length + ' jogadores para posicionar.';
+          }
+
+          function responder(candidatoVenceu) {
+              var meio = Math.floor((inicio + fim) / 2);
+
+              if (candidatoVenceu) {
+                  fim = meio;
+              } else {
+                  inicio = meio + 1;
+              }
+
+              duelosFeitos += 1;
+              mostrarDuelo();
+          }
+
+          document.getElementById('botaoIniciarDuelos').addEventListener('click', iniciarDuelos);
+          document.getElementById('botaoCancelarDuelos').addEventListener('click', function () {
+              terminarDuelos(false);
+          });
+          botaoEsquerda.addEventListener('click', function () {
+              responder(true);
+          });
+          botaoDireita.addEventListener('click', function () {
+              responder(false);
+          });
+      })();
+  </script>
 
 </body>
 </html>

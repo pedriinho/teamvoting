@@ -11,11 +11,13 @@ class Player(models.Model):
     is_main = models.BooleanField(default=False)  # True se estiver entre os 20 principais
     queue_position = models.PositiveIntegerField(null=True, blank=True)  # posição na lista de espera
 
-    def average_score(self):
-        votes = self.votes.all()
-        if votes.exists():
-            return sum(vote.score for vote in votes) / votes.count()
-        return 0
+    def average_rank(self):
+        ranks = [vote.rank for vote in self.votes.all()]
+
+        if not ranks:
+            return None
+
+        return sum(ranks) / len(ranks)
 
     def __str__(self):
         return self.name
@@ -27,13 +29,13 @@ class Vote(models.Model):
     voter = models.ForeignKey(
         User, related_name='votes', on_delete=models.CASCADE, null=True, blank=True
     )
-    score = models.PositiveSmallIntegerField()
+    rank = models.PositiveSmallIntegerField()  # 1 = mais forte
 
     class Meta:
-        unique_together = ('player', 'voter')
+        unique_together = [('player', 'voter'), ('voter', 'rank')]
 
     def __str__(self):
-        return f'{self.voter.username} votou {self.score} para {self.player.name}'
+        return f'{self.voter.username} colocou {self.player.name} na posição {self.rank}'
 
 class GameConfig(models.Model):
     # Dias da semana no padrão usado pela votação (compatível com datetime.weekday(),

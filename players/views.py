@@ -6,11 +6,12 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.shortcuts import redirect, render, get_object_or_404
 
 from .decorators import only_tuesday_evening, vote_open_only
 from .models import GameConfig, Player, Vote
-from .utils import are_teams_available
+from .utils import are_teams_available, rank_main_players
 
 ERROR_TRANSLATIONS = {
     "A user with that username already exists.": "Já existe um usuário com esse nome.",
@@ -29,6 +30,24 @@ def reorder_waiting_list():
     for i, player in enumerate(waiting_list, start=1):
         player.queue_position = i
         player.save()
+
+
+def compact_vote_ranks():
+    """Renumera a lista de cada votante para 1..N, fechando buracos."""
+    voter_ids = Vote.objects.exclude(voter=None).values_list('voter_id', flat=True).distinct()
+
+    for voter_id in voter_ids:
+        votes = list(Vote.objects.filter(voter_id=voter_id).order_by('rank', 'id'))
+
+        if [vote.rank for vote in votes] == list(range(1, len(votes) + 1)):
+            continue
+
+        with transaction.atomic():
+            Vote.objects.filter(voter_id=voter_id).delete()
+            Vote.objects.bulk_create([
+                Vote(player_id=vote.player_id, voter_id=voter_id, rank=position)
+                for position, vote in enumerate(votes, start=1)
+            ])
 
 
 def rebalance_players():
@@ -65,18 +84,27 @@ def home(request):
     main_players_limit = config.main_players_limit
     racha_total = config.racha_value
 
-    main_players = Player.objects.filter(is_main=True).order_by('id')
+    main_players_qs = Player.objects.filter(is_main=True)
     waiting_players = Player.objects.filter(is_main=False).order_by('queue_position')
-    is_main_player = main_players.filter(name=request.user.username).exists() if request.user.is_authenticated else False
+    is_main_player = (
+        main_players_qs.filter(name=request.user.username).exists()
+        if request.user.is_authenticated
+        else False
+    )
     show_scores = are_teams_available()
     show_leave = False
     value_racha = racha_total
     hide_racha_value = config.hide_racha_value
 
+    if show_scores:
+        main_players = rank_main_players(main_players_qs)
+    else:
+        main_players = list(main_players_qs.order_by('id'))
+
     if request.user.is_authenticated:
         show_leave = Player.objects.filter(name=request.user.username).exists()
 
-    qtd_main = main_players.count()
+    qtd_main = len(main_players)
 
     if qtd_main > 0:
         value_racha = (racha_total / Decimal(qtd_main)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -121,6 +149,7 @@ def leave_game(request):
     Vote.objects.filter(voter=request.user).delete()
 
     player.delete()
+    compact_vote_ranks()
     rebalance_players()
 
     return redirect('home')
@@ -130,56 +159,76 @@ def leave_game(request):
 @vote_open_only
 def vote(request):
     is_main_player = Player.objects.filter(name=request.user.username, is_main=True).exists()
-    players = Player.objects.filter(is_main=True).exclude(name=request.user.username)
-    player_ids = set(players.values_list('id', flat=True))
+    players = list(Player.objects.filter(is_main=True).exclude(name=request.user.username))
+    player_ids = {player.id for player in players}
 
     if request.method == 'POST':
-        for key, value in request.POST.items():
-            if key.startswith('score_') and value.isdigit():
-                try:
-                    player_id = int(key.split('_')[1])
-                except ValueError:
-                    continue
+        raw_order = request.POST.get('order', '')
 
-                if player_id not in player_ids:
-                    continue
+        try:
+            ordered_ids = [int(chunk) for chunk in raw_order.split(',') if chunk]
+        except ValueError:
+            ordered_ids = []
 
-                score_int = int(value)
+        if sorted(ordered_ids) != sorted(player_ids):
+            messages.error(
+                request,
+                'A ordenação enviada não corresponde à lista de jogadores. Tente novamente.',
+            )
+            return redirect('vote')
 
-                if 1 <= score_int <= 10:
-                    player = Player.objects.get(id=player_id)
-                    Vote.objects.update_or_create(player=player, voter=request.user, defaults={'score': score_int})
+        with transaction.atomic():
+            Vote.objects.filter(voter=request.user).delete()
+            Vote.objects.bulk_create([
+                Vote(player_id=player_id, voter=request.user, rank=position)
+                for position, player_id in enumerate(ordered_ids, start=1)
+            ])
 
-        return redirect('teams')
+        messages.success(request, 'Sua ordenação foi registrada!')
 
-    existing_votes = Vote.objects.filter(voter=request.user)
-    votes_dict = {vote.player.id: vote.score for vote in existing_votes}
+        return redirect('home')
+
+    existing_ranks = dict(
+        Vote.objects.filter(voter=request.user).values_list('player_id', 'rank')
+    )
+
+    players.sort(key=lambda p: (p.id not in existing_ranks, existing_ranks.get(p.id, 0), p.name))
 
     return render(request, 'players/vote.html', {
         'players': players,
-        'votes_dict': votes_dict,
+        'has_saved_vote': bool(existing_ranks),
         'is_main_player': is_main_player,
     })
 
 
 @only_tuesday_evening
 def teams(request):
-    players = list(Player.objects.filter(is_main=True))
-    players = sorted(players, key=lambda p: p.average_score(), reverse=True)
+    players = rank_main_players()
+    total_players = len(players)
     max_team_size = GameConfig.load().players_per_team
-    num_teams = (len(players) + max_team_size - 1) // max_team_size
+    num_teams = (total_players + max_team_size - 1) // max_team_size
     teams = [[] for _ in range(num_teams)]
-    team_scores = [0] * num_teams
+    team_strengths = [0] * num_teams
 
     for player in players:
+        player.strength = total_players + 1 - player.position
+
         best_index = min(
             (i for i in range(num_teams) if len(teams[i]) < max_team_size),
-            key=lambda i: (len(teams[i]), team_scores[i])
+            key=lambda i: (len(teams[i]), team_strengths[i])
         )
         teams[best_index].append(player)
-        team_scores[best_index] += player.average_score()
+        team_strengths[best_index] += player.strength
 
-    return render(request, 'players/teams.html', {'teams': teams})
+    teams_with_summary = [
+        {
+            'players': team,
+            'average_position': sum(p.position for p in team) / len(team) if team else 0,
+        }
+        for team in teams
+    ]
+
+    return render(request, 'players/teams.html', {'teams': teams_with_summary})
 
 
 def signup(request):
@@ -239,6 +288,7 @@ def admin_remove_player(request, player_id):
     Vote.objects.filter(voter__username=player.name).delete()
 
     player.delete()
+    compact_vote_ranks()
     rebalance_players()
 
     return redirect('home')

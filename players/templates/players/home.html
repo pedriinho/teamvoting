@@ -33,6 +33,16 @@
 
     <div class="max-w-6xl mx-auto px-4 py-8 pt-20">
 
+        {% if messages %}
+        <div class="flex flex-col gap-2 mb-6">
+            {% for message in messages %}
+            <div class="rounded px-4 py-3 text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <!-- Botões de Participar/Sair e Adicionar -->
         {% if user.is_authenticated %}
         <div class="flex gap-3 mb-6">
@@ -78,7 +88,7 @@
                     <thead class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
                         <tr>
                             <th class="px-6 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Nome</th>
-                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Média de Votos</th>
+                            <th class="px-6 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Posição</th>
                             {% if user.is_superuser %}
                             <th class="px-6 py-3 text-center text-sm font-medium text-gray-700 dark:text-gray-300">Ações</th>
                             {% endif %}
@@ -92,7 +102,12 @@
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 {% if show_scores %}
-                                    <span class="text-gray-900 dark:text-gray-100 font-semibold">{{ player.average_score|floatformat:2 }}</span>
+                                    {% if player.avg_rank %}
+                                        <span class="text-gray-900 dark:text-gray-100 font-semibold">{{ player.position }}º</span>
+                                        <span class="text-gray-500 dark:text-gray-400 text-sm ml-1" title="Média das posições recebidas">~{{ player.avg_rank|floatformat:2 }}</span>
+                                    {% else %}
+                                        <span class="text-gray-400 dark:text-gray-500 italic">Sem votos</span>
+                                    {% endif %}
                                 {% else %}
                                     <span class="text-gray-400 dark:text-gray-500 italic">Liberado após o encerramento da votação</span>
                                 {% endif %}

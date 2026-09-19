@@ -26,16 +26,29 @@
   <!-- Conteúdo centralizado abaixo da navbar -->
   <div class="flex-grow flex flex-col items-center pt-20 px-4 gap-6">
 
-    <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-4">Times Formados</h1>
+    <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-2 text-center">Times Formados</h1>
+    <p class="text-sm text-gray-600 dark:text-gray-400 text-center -mt-4">
+      A posição vem da ordenação feita pelos jogadores: 1º é o mais forte.
+    </p>
 
     {% for team in teams %}
       <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md w-full max-w-md p-6 transition-colors">
-        <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">Time {{ forloop.counter }}</h2>
+        <div class="flex flex-wrap items-baseline justify-between gap-x-3 mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+          <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200">Time {{ forloop.counter }}</h2>
+          <span class="text-sm text-gray-500 dark:text-gray-400" title="Média das posições dos jogadores do time; menor é mais forte">
+            Força do time: ~{{ team.average_position|floatformat:2 }}
+          </span>
+        </div>
         <ul class="divide-y divide-gray-200 dark:divide-gray-700">
-          {% for player in team %}
-            <li class="flex justify-between py-2 text-gray-800 dark:text-gray-200">
-              <span>{{ player.name }}</span>
-              <span class="font-medium text-gray-600 dark:text-gray-400">Média: {{ player.average_score|floatformat:2 }}</span>
+          {% for player in team.players %}
+            <li class="flex justify-between gap-3 py-2 text-gray-800 dark:text-gray-200">
+              <span class="min-w-0 truncate">{{ player.name }}</span>
+              <span class="shrink-0 font-medium text-gray-600 dark:text-gray-400">
+                {{ player.position }}º
+                {% if player.avg_rank %}
+                  <span class="text-sm text-gray-500 dark:text-gray-500" title="Média das posições recebidas">~{{ player.avg_rank|floatformat:2 }}</span>
+                {% endif %}
+              </span>
             </li>
           {% endfor %}
         </ul>

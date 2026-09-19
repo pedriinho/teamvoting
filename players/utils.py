@@ -2,7 +2,7 @@ import datetime
 
 import pytz
 
-from .models import GameConfig
+from .models import GameConfig, Player
 
 TIMEZONE = pytz.timezone("America/Sao_Paulo")
 
@@ -31,3 +31,34 @@ def are_teams_available(config=None):
     liberados automaticamente assim que a janela de votação se encerra.
     """
     return not is_voting_open(config)
+
+
+def rank_main_players(players=None):
+    """
+    Classifica os jogadores principais do mais forte para o mais fraco,
+    anexando avg_rank (média das posições recebidas) e position (1 = mais
+    forte, com empates compartilhando a posição) a cada um.
+    """
+    if players is None:
+        players = Player.objects.filter(is_main=True)
+
+    players = list(players)
+
+    for player in players:
+        player.avg_rank = player.average_rank()
+
+    players.sort(
+        key=lambda p: (p.avg_rank is None, p.avg_rank if p.avg_rank is not None else 0, p.name)
+    )
+
+    last_avg = object()
+    position = 0
+
+    for index, player in enumerate(players, start=1):
+        if player.avg_rank != last_avg:
+            position = index
+            last_avg = player.avg_rank
+
+        player.position = position
+
+    return players
