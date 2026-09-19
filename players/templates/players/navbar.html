@@ -19,6 +19,11 @@
                 <i class="fas fa-vote-yea"></i> Votar
             </a>
         {% endif %}
+        {% if user.is_authenticated %}
+            <a href="{% url 'account' %}" title="Minha conta" class="btn-hover bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded flex items-center gap-2">
+                <i class="fas fa-user"></i> Conta
+            </a>
+        {% endif %}
         <a href="{% url 'teams' %}" class="btn-hover bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded flex items-center gap-2">
             <i class="fas fa-users"></i> Ver Times
         </a>

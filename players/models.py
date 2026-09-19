@@ -37,6 +37,31 @@ class Vote(models.Model):
     def __str__(self):
         return f'{self.voter.username} colocou {self.player.name} na posição {self.rank}'
 
+class VotingRound(models.Model):
+    closed_on = models.DateField(unique=True)
+    total_players = models.PositiveIntegerField()
+
+    class Meta:
+        ordering = ['-closed_on']
+
+    def __str__(self):
+        return f'Votação de {self.closed_on}'
+
+
+class RoundResult(models.Model):
+    voting_round = models.ForeignKey(VotingRound, related_name='results', on_delete=models.CASCADE)
+    player_name = models.CharField(max_length=100)
+    position = models.PositiveIntegerField()
+    average_rank = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('voting_round', 'player_name')
+        ordering = ['position', 'player_name']
+
+    def __str__(self):
+        return f'{self.player_name}: {self.position}º de {self.voting_round.total_players}'
+
+
 class GameConfig(models.Model):
     # Dias da semana no padrão usado pela votação (compatível com datetime.weekday(),
     # onde segunda-feira = 0 ... domingo = 6).

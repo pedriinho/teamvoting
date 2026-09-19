@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minha Conta</title>
+  <script>
+      (function () {
+          var theme = localStorage.getItem('theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (theme === 'dark' || (!theme && prefersDark)) {
+              document.documentElement.classList.add('dark');
+          }
+      })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+      tailwind.config = { darkMode: 'class' };
+  </script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col transition-colors">
+
+  <!-- Navbar -->
+  {% include 'players/navbar.html' %}
+
+  <div class="flex-grow w-full max-w-2xl mx-auto py-6 px-4 flex flex-col gap-6">
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 sm:p-6 transition-colors">
+      <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+        <i class="fas fa-user text-gray-500 dark:text-gray-400"></i> {{ user.username }}
+      </h1>
+
+      {% if player %}
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Participando do racha.</p>
+      {% else %}
+        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          Você não está participando no momento.
+        </p>
+      {% endif %}
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+        <div class="rounded-lg bg-gray-50 dark:bg-gray-700/50 px-4 py-3">
+          <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Posição atual</p>
+          {% if current %}
+            <p class="text-lg font-bold text-gray-900 dark:text-gray-100">
+              {{ current.position }}º de {{ current.total_players }}
+            </p>
+          {% else %}
+            <p class="text-sm text-gray-500 dark:text-gray-400 italic">Sai quando a votação encerrar</p>
+          {% endif %}
+        </div>
+        <div class="rounded-lg bg-gray-50 dark:bg-gray-700/50 px-4 py-3">
+          <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Melhor posição</p>
+          {% if best_position %}
+            <p class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ best_position }}º</p>
+          {% else %}
+            <p class="text-sm text-gray-500 dark:text-gray-400 italic">Sem histórico</p>
+          {% endif %}
+        </div>
+        <div class="rounded-lg bg-gray-50 dark:bg-gray-700/50 px-4 py-3">
+          <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Votações</p>
+          <p class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ rounds_played }}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden transition-colors">
+      <div class="bg-gray-50 dark:bg-gray-700 px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+          <i class="fas fa-clock-rotate-left text-gray-600 dark:text-gray-300"></i> Histórico de votações
+        </h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead class="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+            <tr>
+              <th class="px-4 sm:px-6 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Votação</th>
+              <th class="px-4 sm:px-6 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Posição</th>
+              <th class="px-4 sm:px-6 py-3 text-left text-sm font-medium text-gray-700 dark:text-gray-300">Média</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for result in history %}
+            <tr>
+              <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-gray-900 dark:text-gray-100">
+                {{ result.voting_round.closed_on|date:"d/m/Y" }}
+              </td>
+              <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-gray-900 dark:text-gray-100 font-semibold">
+                {{ result.position }}º de {{ result.voting_round.total_players }}
+              </td>
+              <td class="px-4 sm:px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400">
+                {% if result.average_rank %}~{{ result.average_rank|floatformat:2 }}{% else %}sem votos{% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="3" class="px-4 sm:px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                Nenhuma votação encerrada ainda. O resultado é arquivado sempre que a janela de votação termina.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <a href="{% url 'home' %}" class="text-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+
+  </div>
+
+</body>
+</html>

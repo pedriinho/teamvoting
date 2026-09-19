@@ -10,8 +10,8 @@ from django.db import transaction
 from django.shortcuts import redirect, render, get_object_or_404
 
 from .decorators import only_tuesday_evening, vote_open_only
-from .models import GameConfig, Player, Vote
-from .utils import are_teams_available, rank_main_players
+from .models import GameConfig, Player, RoundResult, Vote
+from .utils import archive_closed_round, are_teams_available, rank_main_players
 
 ERROR_TRANSLATIONS = {
     "A user with that username already exists.": "Já existe um usuário com esse nome.",
@@ -81,6 +81,7 @@ def home(request):
     rebalance_players()
 
     config = GameConfig.load()
+    archive_closed_round(config)
     main_players_limit = config.main_players_limit
     racha_total = config.racha_value
 
@@ -203,6 +204,8 @@ def vote(request):
 
 @only_tuesday_evening
 def teams(request):
+    archive_closed_round()
+
     players = rank_main_players()
     total_players = len(players)
     max_team_size = GameConfig.load().players_per_team
@@ -229,6 +232,39 @@ def teams(request):
     ]
 
     return render(request, 'players/teams.html', {'teams': teams_with_summary})
+
+
+@login_required
+def account(request):
+    archive_closed_round()
+
+    name = request.user.username
+    player = Player.objects.filter(name=name).first()
+
+    history = list(
+        RoundResult.objects.filter(player_name=name)
+        .select_related('voting_round')
+        .order_by('-voting_round__closed_on')
+    )
+
+    best_position = min((result.position for result in history), default=None)
+
+    current = None
+
+    if player and player.is_main and are_teams_available():
+        ranked = rank_main_players()
+        current = next((p for p in ranked if p.id == player.id), None)
+
+        if current is not None:
+            current.total_players = len(ranked)
+
+    return render(request, 'players/account.html', {
+        'player': player,
+        'history': history,
+        'best_position': best_position,
+        'current': current,
+        'rounds_played': len(history),
+    })
 
 
 def signup(request):

@@ -1,8 +1,9 @@
 import datetime
 
 import pytz
+from django.db import transaction
 
-from .models import GameConfig, Player
+from .models import GameConfig, Player, RoundResult, Vote, VotingRound
 
 TIMEZONE = pytz.timezone("America/Sao_Paulo")
 
@@ -62,3 +63,51 @@ def rank_main_players(players=None):
         player.position = position
 
     return players
+
+
+def last_closed_round_date(config=None):
+    """Data da última janela de votação que já se encerrou."""
+    config = config or GameConfig.load()
+    now = now_local()
+    days_since_vote_day = (now.weekday() - config.vote_weekday_index()) % 7
+    date = now.date() - datetime.timedelta(days=days_since_vote_day)
+
+    if days_since_vote_day == 0 and now.time() < config.vote_end_time:
+        date -= datetime.timedelta(days=7)
+
+    return date
+
+
+def archive_closed_round(config=None):
+    """Arquiva a classificação da rodada encerrada, uma única vez por rodada."""
+    config = config or GameConfig.load()
+
+    if is_voting_open(config):
+        return None
+
+    closed_on = last_closed_round_date(config)
+
+    if VotingRound.objects.filter(closed_on=closed_on).exists():
+        return None
+
+    if not Vote.objects.exists():
+        return None
+
+    ranked = rank_main_players()
+
+    if not ranked:
+        return None
+
+    with transaction.atomic():
+        voting_round = VotingRound.objects.create(closed_on=closed_on, total_players=len(ranked))
+        RoundResult.objects.bulk_create([
+            RoundResult(
+                voting_round=voting_round,
+                player_name=player.name,
+                position=player.position,
+                average_rank=player.avg_rank,
+            )
+            for player in ranked
+        ])
+
+    return voting_round

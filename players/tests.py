@@ -1,11 +1,12 @@
+import datetime
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import GameConfig, Player, Vote
-from .utils import rank_main_players
+from .models import GameConfig, Player, RoundResult, Vote, VotingRound
+from .utils import TIMEZONE, archive_closed_round, rank_main_players
 from .views import compact_vote_ranks
 
 CREDENCIAL_DE_TESTE = 'racha-1234'
@@ -160,3 +161,129 @@ class TeamsViewTests(TestCase):
         self.assertEqual([[p.name for p in team['players']] for team in teams],
                          [['p1', 'p4'], ['p2', 'p3']])
         self.assertEqual([team['average_position'] for team in teams], [2.5, 2.5])
+
+
+class ArchiveClosedRoundTests(TestCase):
+    def setUp(self):
+        config = GameConfig.load()
+        config.vote_day = GameConfig.TUESDAY
+        config.save()
+        self.config = config
+
+        self.ana, self.bruno = make_players('ana', 'bruno')
+        self.voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
+        cast_ballot(self.voter, [self.bruno, self.ana])
+
+    def fake_now(self, weekday, hour):
+        base = datetime.datetime(2026, 9, 15, hour, 0)  # 2026-09-15 é uma terça
+        moment = base + datetime.timedelta(days=weekday - 1)
+        return TIMEZONE.localize(moment)
+
+    def test_archives_once_after_the_window_closes(self):
+        fim_da_janela = self.fake_now(1, 23).replace(minute=59)
+
+        with patch('players.utils.now_local', return_value=fim_da_janela):
+            first = archive_closed_round()
+            second = archive_closed_round()
+
+        self.assertIsNotNone(first)
+        self.assertIsNone(second)
+        self.assertEqual(VotingRound.objects.count(), 1)
+        self.assertEqual(first.closed_on, datetime.date(2026, 9, 15))
+        self.assertEqual(first.total_players, 2)
+        self.assertEqual(
+            [(r.player_name, r.position) for r in first.results.all()],
+            [('bruno', 1), ('ana', 2)],
+        )
+
+    def test_does_not_archive_while_voting_is_open(self):
+        dentro_da_janela = self.fake_now(1, 20).replace(minute=30)
+
+        with patch('players.utils.now_local', return_value=dentro_da_janela):
+            self.assertIsNone(archive_closed_round())
+
+        self.assertEqual(VotingRound.objects.count(), 0)
+
+    def test_before_the_window_the_round_belongs_to_the_previous_week(self):
+        with patch('players.utils.now_local', return_value=self.fake_now(1, 10)):
+            voting_round = archive_closed_round()
+
+        self.assertEqual(voting_round.closed_on, datetime.date(2026, 9, 8))
+
+    def test_midweek_archives_under_the_last_vote_day(self):
+        with patch('players.utils.now_local', return_value=self.fake_now(3, 12)):
+            voting_round = archive_closed_round()
+
+        self.assertEqual(voting_round.closed_on, datetime.date(2026, 9, 15))
+
+    def test_nothing_to_archive_without_votes(self):
+        Vote.objects.all().delete()
+
+        with patch('players.utils.now_local', return_value=self.fake_now(3, 12)):
+            self.assertIsNone(archive_closed_round())
+
+    def test_history_survives_the_player_leaving(self):
+        with patch('players.utils.now_local', return_value=self.fake_now(3, 12)):
+            archive_closed_round()
+
+        Vote.objects.filter(player=self.bruno).delete()
+        self.bruno.delete()
+
+        self.assertEqual(RoundResult.objects.filter(player_name='bruno').count(), 1)
+
+class AccountViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('ana', password=CREDENCIAL_DE_TESTE)
+        self.client.force_login(self.user)
+
+    def test_requires_login(self):
+        self.client.logout()
+
+        response = self.client.get(reverse('account'))
+
+        self.assertEqual(response.status_code, 302)
+
+    def test_shows_position_per_closed_round(self):
+        first = VotingRound.objects.create(closed_on=datetime.date(2026, 9, 8), total_players=12)
+        second = VotingRound.objects.create(closed_on=datetime.date(2026, 9, 15), total_players=10)
+        RoundResult.objects.create(
+            voting_round=first, player_name='ana', position=7, average_rank=6.5
+        )
+        RoundResult.objects.create(
+            voting_round=second, player_name='ana', position=3, average_rank=3.2
+        )
+        RoundResult.objects.create(
+            voting_round=second, player_name='bruno', position=1, average_rank=1.0
+        )
+
+        response = self.client.get(reverse('account'))
+        history = response.context['history']
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [(r.position, r.voting_round.total_players) for r in history],
+            [(3, 10), (7, 12)],
+        )
+        self.assertEqual(response.context['best_position'], 3)
+        self.assertEqual(response.context['rounds_played'], 2)
+        self.assertContains(response, '3º de 10')
+
+    def test_current_position_appears_when_voting_is_closed(self):
+        ana = Player.objects.create(name='ana', is_main=True)
+        bruno = Player.objects.create(name='bruno', is_main=True)
+        voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
+        cast_ballot(voter, [bruno, ana])
+
+        with patch('players.views.are_teams_available', return_value=True):
+            response = self.client.get(reverse('account'))
+
+        current = response.context['current']
+        self.assertEqual((current.position, current.total_players), (2, 2))
+
+    def test_page_works_for_a_user_without_a_player(self):
+        response = self.client.get(reverse('account'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context['player'])
+        self.assertIsNone(response.context['best_position'])
+        self.assertEqual(response.context['history'], [])

@@ -7,6 +7,7 @@ urlpatterns = [
     path('leave/', views.leave_game, name='leave_game'),
     path('vote/', views.vote, name='vote'),
     path('teams/', views.teams, name='teams'),
+    path('account/', views.account, name='account'),
     path('signup/', views.signup, name='signup'),
     path('admin-add-player/', views.admin_add_player, name='admin_add_player'),
     path('admin-remove-player/<int:player_id>/', views.admin_remove_player, name='admin_remove_player'),
