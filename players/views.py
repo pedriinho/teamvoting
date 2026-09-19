@@ -9,7 +9,7 @@ from django.db import transaction
 from django.shortcuts import redirect, render, get_object_or_404
 from django.views.decorators.http import require_POST
 
-from .decorators import only_tuesday_evening, vote_open_only
+from .decorators import teams_released_only, vote_open_only
 from .models import GameConfig, Player, RoundResult, Vote
 from .utils import archive_closed_round, are_teams_available, current_round_date, rank_players
 
@@ -136,7 +136,7 @@ def vote(request):
     })
 
 
-@only_tuesday_evening
+@teams_released_only
 def teams(request):
     archive_closed_round()
 

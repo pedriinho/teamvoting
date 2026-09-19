@@ -5,9 +5,8 @@ from django.http import HttpResponseForbidden
 from .utils import are_teams_available, is_voting_open
 
 
-def only_tuesday_evening(view_func):
-    """Libera o acesso somente quando os times já foram liberados
-    (ou seja, fora da janela de votação configurada)."""
+def teams_released_only(view_func):
+    """Libera o acesso somente fora da janela de votação configurada."""
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
         html = """
