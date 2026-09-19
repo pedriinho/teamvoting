@@ -45,6 +45,42 @@ def current_round_date(config=None):
     return last_closed_round_date(config)
 
 
+def normalized_ranks(round_date):
+    """
+    Média das posições de cada jogador na rodada, comparável entre listas de
+    tamanhos diferentes.
+
+    Uma posição é primeiro convertida em fração da lista em que foi dada
+    ((posição - 1) / (tamanho - 1)), e a média é reescalada para a maior lista
+    da rodada. Quando todas as listas têm o mesmo tamanho, o resultado é a
+    média simples das posições.
+    """
+    ballots = defaultdict(dict)
+
+    for player_id, voter_id, rank in Vote.objects.filter(round_date=round_date).values_list(
+        'player_id', 'voter_id', 'rank'
+    ):
+        ballots[voter_id][player_id] = rank
+
+    fractions = defaultdict(list)
+
+    for ranks in ballots.values():
+        size = len(ranks)
+
+        for player_id, rank in ranks.items():
+            if size > 1:
+                fractions[player_id].append((rank - 1) / (size - 1))
+            else:
+                fractions[player_id].append(0.5)
+
+    scale = max((len(ranks) for ranks in ballots.values()), default=0)
+
+    return {
+        player_id: sum(values) / len(values) * (scale - 1) + 1
+        for player_id, values in fractions.items()
+    }
+
+
 def rank_players(players=None, round_date=None):
     """
     Classifica os jogadores da rodada do mais forte para o mais fraco,
@@ -58,14 +94,10 @@ def rank_players(players=None, round_date=None):
         round_date = current_round_date()
 
     players = list(players)
-    received = defaultdict(list)
-
-    for player_id, rank in Vote.objects.filter(round_date=round_date).values_list('player_id', 'rank'):
-        received[player_id].append(rank)
+    averages = normalized_ranks(round_date)
 
     for player in players:
-        ranks = received.get(player.id)
-        player.avg_rank = sum(ranks) / len(ranks) if ranks else None
+        player.avg_rank = averages.get(player.id)
 
     players.sort(
         key=lambda p: (p.avg_rank is None, p.avg_rank if p.avg_rank is not None else 0, p.name)

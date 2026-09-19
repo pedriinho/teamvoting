@@ -45,10 +45,9 @@ class RankPlayersTests(TestCase):
     def test_ties_share_the_same_position(self):
         ana, bruno, caio = make_players('ana', 'bruno', 'caio')
         voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
-
-        cast_ballot(voter, [ana, bruno])
-
         other = User.objects.create_user('other', password=CREDENCIAL_DE_TESTE)
+
+        cast_ballot(voter, [ana, bruno, caio])
         cast_ballot(other, [bruno, ana, caio])
 
         ranked = rank_players()
@@ -57,6 +56,36 @@ class RankPlayersTests(TestCase):
             [(p.name, p.position) for p in ranked],
             [('ana', 1), ('bruno', 1), ('caio', 3)],
         )
+
+    def test_equal_sized_ballots_keep_the_plain_average(self):
+        ana, bruno = make_players('ana', 'bruno')
+        voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
+        other = User.objects.create_user('other', password=CREDENCIAL_DE_TESTE)
+
+        cast_ballot(voter, [ana, bruno])
+        cast_ballot(other, [ana, bruno])
+
+        ranked = rank_players()
+
+        self.assertAlmostEqual(ranked[0].avg_rank, 1.0)
+        self.assertAlmostEqual(ranked[1].avg_rank, 2.0)
+
+    def test_ballots_of_different_sizes_are_comparable(self):
+        ana, bruno, caio = make_players('ana', 'bruno', 'caio')
+        curta = User.objects.create_user('curta', password=CREDENCIAL_DE_TESTE)
+        longa = User.objects.create_user('longa', password=CREDENCIAL_DE_TESTE)
+
+        cast_ballot(curta, [ana, bruno])
+        cast_ballot(longa, [bruno, ana, caio])
+
+        ranked = rank_players()
+
+        # Na média simples ana e bruno empatariam em 1.5, embora o 2º lugar de
+        # bruno numa lista de dois seja o último e o de ana numa de três não.
+        self.assertEqual([p.name for p in ranked], ['ana', 'bruno', 'caio'])
+        self.assertAlmostEqual(ranked[0].avg_rank, 1.5)
+        self.assertAlmostEqual(ranked[1].avg_rank, 2.0)
+        self.assertAlmostEqual(ranked[2].avg_rank, 3.0)
 
     def test_players_without_votes_go_last(self):
         ana, bruno = make_players('ana', 'bruno')
