@@ -1,4 +1,5 @@
 import datetime
+from collections import defaultdict
 
 import pytz
 from django.db import transaction
@@ -34,19 +35,37 @@ def are_teams_available(config=None):
     return not is_voting_open(config)
 
 
-def rank_players(players=None):
+def current_round_date(config=None):
+    """Data da rodada em andamento, ou da última encerrada."""
+    config = config or GameConfig.load()
+
+    if is_voting_open(config):
+        return now_local().date()
+
+    return last_closed_round_date(config)
+
+
+def rank_players(players=None, round_date=None):
     """
-    Classifica os jogadores do mais forte para o mais fraco, anexando
-    avg_rank (média das posições recebidas) e position (1 = mais forte, com
-    empates compartilhando a posição) a cada um.
+    Classifica os jogadores da rodada do mais forte para o mais fraco,
+    anexando avg_rank (média das posições recebidas) e position (1 = mais
+    forte, com empates compartilhando a posição) a cada um.
     """
     if players is None:
         players = Player.objects.all()
 
+    if round_date is None:
+        round_date = current_round_date()
+
     players = list(players)
+    received = defaultdict(list)
+
+    for player_id, rank in Vote.objects.filter(round_date=round_date).values_list('player_id', 'rank'):
+        received[player_id].append(rank)
 
     for player in players:
-        player.avg_rank = player.average_rank()
+        ranks = received.get(player.id)
+        player.avg_rank = sum(ranks) / len(ranks) if ranks else None
 
     players.sort(
         key=lambda p: (p.avg_rank is None, p.avg_rank if p.avg_rank is not None else 0, p.name)
@@ -90,10 +109,10 @@ def archive_closed_round(config=None):
     if VotingRound.objects.filter(closed_on=closed_on).exists():
         return None
 
-    if not Vote.objects.exists():
+    if not Vote.objects.filter(round_date=closed_on).exists():
         return None
 
-    ranked = rank_players()
+    ranked = rank_players(round_date=closed_on)
 
     if not ranked:
         return None

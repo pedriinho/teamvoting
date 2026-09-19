@@ -10,7 +10,7 @@ from django.shortcuts import redirect, render, get_object_or_404
 
 from .decorators import only_tuesday_evening, vote_open_only
 from .models import GameConfig, Player, RoundResult, Vote
-from .utils import archive_closed_round, are_teams_available, rank_players
+from .utils import archive_closed_round, are_teams_available, current_round_date, rank_players
 
 ERROR_TRANSLATIONS = {
     "A user with that username already exists.": "Já existe um usuário com esse nome.",
@@ -22,18 +22,24 @@ ERROR_TRANSLATIONS = {
 
 def compact_vote_ranks():
     """Renumera a lista de cada votante para 1..N, fechando buracos."""
-    voter_ids = Vote.objects.exclude(voter=None).values_list('voter_id', flat=True).distinct()
+    ballots = Vote.objects.exclude(voter=None).values_list('voter_id', 'round_date').distinct()
 
-    for voter_id in voter_ids:
-        votes = list(Vote.objects.filter(voter_id=voter_id).order_by('rank', 'id'))
+    for voter_id, round_date in ballots:
+        ballot = Vote.objects.filter(voter_id=voter_id, round_date=round_date)
+        votes = list(ballot.order_by('rank', 'id'))
 
         if [vote.rank for vote in votes] == list(range(1, len(votes) + 1)):
             continue
 
         with transaction.atomic():
-            Vote.objects.filter(voter_id=voter_id).delete()
+            ballot.delete()
             Vote.objects.bulk_create([
-                Vote(player_id=vote.player_id, voter_id=voter_id, rank=position)
+                Vote(
+                    player_id=vote.player_id,
+                    voter_id=voter_id,
+                    round_date=round_date,
+                    rank=position,
+                )
                 for position, vote in enumerate(votes, start=1)
             ])
 
@@ -83,6 +89,8 @@ def vote(request):
     players = list(Player.objects.exclude(name=request.user.username))
     player_ids = {player.id for player in players}
 
+    round_date = current_round_date()
+
     if request.method == 'POST':
         raw_order = request.POST.get('order', '')
 
@@ -99,9 +107,14 @@ def vote(request):
             return redirect('vote')
 
         with transaction.atomic():
-            Vote.objects.filter(voter=request.user).delete()
+            Vote.objects.filter(voter=request.user, round_date=round_date).delete()
             Vote.objects.bulk_create([
-                Vote(player_id=player_id, voter=request.user, rank=position)
+                Vote(
+                    player_id=player_id,
+                    voter=request.user,
+                    round_date=round_date,
+                    rank=position,
+                )
                 for position, player_id in enumerate(ordered_ids, start=1)
             ])
 
@@ -110,7 +123,8 @@ def vote(request):
         return redirect('home')
 
     existing_ranks = dict(
-        Vote.objects.filter(voter=request.user).values_list('player_id', 'rank')
+        Vote.objects.filter(voter=request.user, round_date=round_date)
+        .values_list('player_id', 'rank')
     )
 
     players.sort(key=lambda p: (p.id not in existing_ranks, existing_ranks.get(p.id, 0), p.name))

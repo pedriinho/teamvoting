@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .models import GameConfig, Player, RoundResult, Vote, VotingRound
-from .utils import TIMEZONE, archive_closed_round, rank_players
+from .utils import TIMEZONE, archive_closed_round, current_round_date, rank_players
 from .views import compact_vote_ranks
 
 CREDENCIAL_DE_TESTE = 'racha-1234'
@@ -16,9 +16,13 @@ def make_players(*names):
     return [Player.objects.create(name=name) for name in names]
 
 
-def cast_ballot(voter, ordered_players):
+def cast_ballot(voter, ordered_players, round_date=None):
+    round_date = round_date or current_round_date()
+
     for position, player in enumerate(ordered_players, start=1):
-        Vote.objects.create(player=player, voter=voter, rank=position)
+        Vote.objects.create(
+            player=player, voter=voter, round_date=round_date, rank=position
+        )
 
 
 class RankPlayersTests(TestCase):
@@ -42,13 +46,10 @@ class RankPlayersTests(TestCase):
         ana, bruno, caio = make_players('ana', 'bruno', 'caio')
         voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
 
-        Vote.objects.create(player=ana, voter=voter, rank=1)
-        Vote.objects.create(player=bruno, voter=voter, rank=2)
+        cast_ballot(voter, [ana, bruno])
 
         other = User.objects.create_user('other', password=CREDENCIAL_DE_TESTE)
-        Vote.objects.create(player=bruno, voter=other, rank=1)
-        Vote.objects.create(player=ana, voter=other, rank=2)
-        Vote.objects.create(player=caio, voter=other, rank=3)
+        cast_ballot(other, [bruno, ana, caio])
 
         ranked = rank_players()
 
@@ -61,7 +62,9 @@ class RankPlayersTests(TestCase):
         ana, bruno = make_players('ana', 'bruno')
         voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
 
-        Vote.objects.create(player=bruno, voter=voter, rank=5)
+        Vote.objects.create(
+            player=bruno, voter=voter, round_date=current_round_date(), rank=5
+        )
 
         ranked = rank_players()
 
@@ -172,7 +175,8 @@ class ArchiveClosedRoundTests(TestCase):
 
         self.ana, self.bruno = make_players('ana', 'bruno')
         self.voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
-        cast_ballot(self.voter, [self.bruno, self.ana])
+        self.rodada = datetime.date(2026, 9, 15)
+        cast_ballot(self.voter, [self.bruno, self.ana], round_date=self.rodada)
 
     def fake_now(self, weekday, hour):
         base = datetime.datetime(2026, 9, 15, hour, 0)  # 2026-09-15 é uma terça
@@ -205,10 +209,14 @@ class ArchiveClosedRoundTests(TestCase):
         self.assertEqual(VotingRound.objects.count(), 0)
 
     def test_before_the_window_the_round_belongs_to_the_previous_week(self):
+        semana_passada = datetime.date(2026, 9, 8)
+        Vote.objects.all().delete()
+        cast_ballot(self.voter, [self.bruno, self.ana], round_date=semana_passada)
+
         with patch('players.utils.now_local', return_value=self.fake_now(1, 10)):
             voting_round = archive_closed_round()
 
-        self.assertEqual(voting_round.closed_on, datetime.date(2026, 9, 8))
+        self.assertEqual(voting_round.closed_on, semana_passada)
 
     def test_midweek_archives_under_the_last_vote_day(self):
         with patch('players.utils.now_local', return_value=self.fake_now(3, 12)):
@@ -346,3 +354,38 @@ class HomeViewTests(TestCase):
 
         self.assertFalse(response.context['show_scores'])
         self.assertContains(response, 'Liberado após o encerramento da votação')
+
+
+class RoundScopeTests(TestCase):
+    def setUp(self):
+        self.ana, self.bruno = make_players('ana', 'bruno')
+        self.voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
+
+    def test_previous_round_votes_do_not_count(self):
+        antiga = current_round_date() - datetime.timedelta(days=7)
+        cast_ballot(self.voter, [self.bruno, self.ana], round_date=antiga)
+
+        ranked = rank_players()
+
+        self.assertEqual([p.avg_rank for p in ranked], [None, None])
+
+    def test_each_round_keeps_its_own_ballot(self):
+        antiga = current_round_date() - datetime.timedelta(days=7)
+        cast_ballot(self.voter, [self.bruno, self.ana], round_date=antiga)
+        cast_ballot(self.voter, [self.ana, self.bruno])
+
+        self.assertEqual(Vote.objects.count(), 4)
+        self.assertEqual([p.name for p in rank_players()], ['ana', 'bruno'])
+        self.assertEqual([p.name for p in rank_players(round_date=antiga)], ['bruno', 'ana'])
+
+    def test_voting_replaces_only_the_current_round(self):
+        antiga = current_round_date() - datetime.timedelta(days=7)
+        cast_ballot(self.voter, [self.bruno, self.ana], round_date=antiga)
+
+        self.client.force_login(self.voter)
+
+        with patch('players.decorators.is_voting_open', return_value=True):
+            self.client.post(reverse('vote'), {'order': f'{self.ana.id},{self.bruno.id}'})
+
+        self.assertEqual(Vote.objects.filter(round_date=antiga).count(), 2)
+        self.assertEqual([p.name for p in rank_players()], ['ana', 'bruno'])

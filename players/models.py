@@ -8,14 +8,6 @@ from django.db import models
 class Player(models.Model):
     name = models.CharField(max_length=100)
 
-    def average_rank(self):
-        ranks = [vote.rank for vote in self.votes.all()]
-
-        if not ranks:
-            return None
-
-        return sum(ranks) / len(ranks)
-
     def __str__(self):
         return self.name
 
@@ -26,10 +18,14 @@ class Vote(models.Model):
     voter = models.ForeignKey(
         User, related_name='votes', on_delete=models.CASCADE, null=True, blank=True
     )
+    round_date = models.DateField()  # dia da janela de votação em que foi dado
     rank = models.PositiveSmallIntegerField()  # 1 = mais forte
 
     class Meta:
-        unique_together = [('player', 'voter'), ('voter', 'rank')]
+        unique_together = [
+            ('player', 'voter', 'round_date'),
+            ('voter', 'round_date', 'rank'),
+        ]
 
     def __str__(self):
         return f'{self.voter.username} colocou {self.player.name} na posição {self.rank}'
