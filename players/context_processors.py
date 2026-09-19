@@ -8,6 +8,6 @@ def game_config(request):
 def player_status(request):
     is_player = (
         request.user.is_authenticated
-        and Player.objects.filter(name=request.user.username).exists()
+        and Player.objects.filter(user=request.user).exists()
     )
     return {'is_player': is_player}

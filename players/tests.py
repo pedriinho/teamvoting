@@ -2,6 +2,7 @@ import datetime
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 
@@ -13,7 +14,10 @@ CREDENCIAL_DE_TESTE = 'racha-1234'
 
 
 def make_players(*names):
-    return [Player.objects.create(name=name) for name in names]
+    return [
+        Player.objects.create(user=User.objects.create_user(name, password=CREDENCIAL_DE_TESTE))
+        for name in names
+    ]
 
 
 def cast_ballot(voter, ordered_players, round_date=None):
@@ -119,7 +123,7 @@ class CompactVoteRanksTests(TestCase):
 class VoteViewTests(TestCase):
     def setUp(self):
         self.voter = User.objects.create_user('ana', password=CREDENCIAL_DE_TESTE)
-        self.ana = Player.objects.create(name='ana')
+        self.ana = Player.objects.create(user=self.voter)
         self.bruno, self.caio = make_players('bruno', 'caio')
         self.client.force_login(self.voter)
 
@@ -307,8 +311,8 @@ class AccountViewTests(TestCase):
         self.assertContains(response, '3º de 10')
 
     def test_current_position_appears_when_voting_is_closed(self):
-        ana = Player.objects.create(name='ana')
-        bruno = Player.objects.create(name='bruno')
+        ana = Player.objects.create(user=self.user)
+        (bruno,) = make_players('bruno')
         voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
         cast_ballot(voter, [bruno, ana])
 
@@ -338,24 +342,25 @@ class JoinGameTests(TestCase):
         response = self.client.post(reverse('join_game'))
 
         self.assertRedirects(response, reverse('home'))
-        self.assertTrue(Player.objects.filter(name='ana').exists())
+        self.assertTrue(Player.objects.filter(user=self.user).exists())
         self.assertEqual(Player.objects.count(), 31)
 
     def test_joining_twice_does_not_duplicate(self):
         self.client.post(reverse('join_game'))
         self.client.post(reverse('join_game'))
 
-        self.assertEqual(Player.objects.filter(name='ana').count(), 1)
+        self.assertEqual(Player.objects.filter(user=self.user).count(), 1)
 
     def test_leaving_removes_the_player_and_the_votes(self):
-        ana, bruno = make_players('ana', 'bruno')
+        ana = Player.objects.create(user=self.user)
+        (bruno,) = make_players('bruno')
         voter = User.objects.create_user('voter', password=CREDENCIAL_DE_TESTE)
         cast_ballot(voter, [ana, bruno])
 
         response = self.client.post(reverse('leave_game'))
 
         self.assertRedirects(response, reverse('home'))
-        self.assertFalse(Player.objects.filter(name='ana').exists())
+        self.assertFalse(Player.objects.filter(user=self.user).exists())
         self.assertEqual(
             [(v.player.name, v.rank) for v in Vote.objects.all()],
             [('bruno', 1)],
@@ -418,3 +423,30 @@ class RoundScopeTests(TestCase):
 
         self.assertEqual(Vote.objects.filter(round_date=antiga).count(), 2)
         self.assertEqual([p.name for p in rank_players()], ['ana', 'bruno'])
+
+
+class PlayerUserLinkTests(TestCase):
+    def test_a_user_has_at_most_one_player(self):
+        user = User.objects.create_user('ana', password=CREDENCIAL_DE_TESTE)
+        Player.objects.create(user=user)
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Player.objects.create(user=user)
+
+    def test_name_comes_from_the_user(self):
+        user = User.objects.create_user('ana', password=CREDENCIAL_DE_TESTE)
+        player = Player.objects.create(user=user)
+
+        user.username = 'ana-maria'
+        user.save()
+        player.refresh_from_db()
+
+        self.assertEqual(player.name, 'ana-maria')
+
+    def test_removing_the_user_removes_the_player(self):
+        user = User.objects.create_user('ana', password=CREDENCIAL_DE_TESTE)
+        Player.objects.create(user=user)
+
+        user.delete()
+
+        self.assertEqual(Player.objects.count(), 0)

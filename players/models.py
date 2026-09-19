@@ -6,7 +6,11 @@ from django.db import models
 
 
 class Player(models.Model):
-    name = models.CharField(max_length=100)
+    user = models.OneToOneField(User, related_name='player', on_delete=models.CASCADE)
+
+    @property
+    def name(self):
+        return self.user.username
 
     def __str__(self):
         return self.name

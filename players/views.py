@@ -51,9 +51,9 @@ def home(request):
     show_scores = are_teams_available()
 
     if show_scores:
-        players = rank_players()
+        players = rank_players(Player.objects.select_related('user'))
     else:
-        players = list(Player.objects.order_by('id'))
+        players = list(Player.objects.select_related('user').order_by('id'))
 
     return render(request, 'players/home.html', {
         'players': players,
@@ -64,15 +64,15 @@ def home(request):
 
 @login_required
 def join_game(request):
-    if not Player.objects.filter(name=request.user.username).exists():
-        Player.objects.create(name=request.user.username)
+    if not Player.objects.filter(user=request.user).exists():
+        Player.objects.create(user=request.user)
 
     return redirect('home')
 
 
 @login_required
 def leave_game(request):
-    player = get_object_or_404(Player, name=request.user.username)
+    player = get_object_or_404(Player, user=request.user)
 
     Vote.objects.filter(player_id=player.id).delete()
     Vote.objects.filter(voter=request.user).delete()
@@ -86,7 +86,7 @@ def leave_game(request):
 @login_required
 @vote_open_only
 def vote(request):
-    players = list(Player.objects.exclude(name=request.user.username))
+    players = list(Player.objects.exclude(user=request.user).select_related('user'))
     player_ids = {player.id for player in players}
 
     round_date = current_round_date()
@@ -139,7 +139,7 @@ def vote(request):
 def teams(request):
     archive_closed_round()
 
-    players = rank_players()
+    players = rank_players(Player.objects.select_related('user'))
     total_players = len(players)
     max_team_size = GameConfig.load().players_per_team
     num_teams = (total_players + max_team_size - 1) // max_team_size
@@ -172,7 +172,7 @@ def account(request):
     archive_closed_round()
 
     name = request.user.username
-    player = Player.objects.filter(name=name).first()
+    player = Player.objects.filter(user=request.user).first()
 
     history = list(
         RoundResult.objects.filter(player_name=name)
@@ -185,7 +185,7 @@ def account(request):
     current = None
 
     if player and are_teams_available():
-        ranked = rank_players()
+        ranked = rank_players(Player.objects.select_related('user'))
         current = next((p for p in ranked if p.id == player.id), None)
 
         if current is not None:
@@ -226,14 +226,14 @@ def signup(request):
 
 @user_passes_test(lambda u: u.is_superuser)
 def admin_add_player(request):
-    existing_players = Player.objects.values_list('name', flat=True)
-    users_to_add = User.objects.exclude(username__in=existing_players)
+    users_to_add = User.objects.filter(player=None)
 
     if request.method == 'POST':
         username = request.POST.get('username')
 
         if username:
-            Player.objects.create(name=username)
+            user = get_object_or_404(User, username=username)
+            Player.objects.get_or_create(user=user)
             messages.success(request, f'Usuário {username} adicionado!')
 
             return redirect('home')
@@ -246,7 +246,7 @@ def admin_remove_player(request, player_id):
     player = get_object_or_404(Player, id=player_id)
 
     Vote.objects.filter(player=player).delete()
-    Vote.objects.filter(voter__username=player.name).delete()
+    Vote.objects.filter(voter=player.user).delete()
 
     player.delete()
     compact_vote_ranks()
