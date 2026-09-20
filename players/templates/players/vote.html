@@ -18,13 +18,6 @@
       tailwind.config = { darkMode: 'class' };
   </script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <style>
-      .duelo-vs {
-          color: #fbbf24;
-          -webkit-text-stroke: 3px #1f2937;
-          paint-order: stroke fill;
-      }
-  </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col transition-colors">
 
@@ -105,31 +98,23 @@
           <p class="text-base font-semibold text-gray-700 dark:text-gray-200">Quem é mais forte?</p>
           <p id="progressoDuelos" class="text-xs text-gray-500 dark:text-gray-500 mb-3"></p>
 
-          <div class="relative w-full overflow-hidden rounded-xl">
-            <div class="grid grid-cols-2">
+          <div class="relative w-full">
+            <div class="grid grid-cols-2 gap-1">
               <button type="button" data-duelo="esquerda"
-                      class="flex flex-col items-center gap-3 px-3 pt-6 pb-5 text-white
-                             bg-gradient-to-br from-blue-500 to-blue-700
-                             hover:from-blue-400 hover:to-blue-600 active:from-blue-600 active:to-blue-800
-                             transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300">
+                      class="flex flex-col items-center gap-3 px-3 pt-6 pb-5 rounded-l-xl text-white
+                             bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-colors
+                             focus:outline-none focus-visible:ring-4 focus-visible:ring-blue-300">
               </button>
               <button type="button" data-duelo="direita"
-                      class="flex flex-col items-center gap-3 px-3 pt-6 pb-5 text-white
-                             bg-gradient-to-bl from-red-500 to-red-700
-                             hover:from-red-400 hover:to-red-600 active:from-red-600 active:to-red-800
-                             transition-colors focus:outline-none focus-visible:ring-4 focus-visible:ring-red-300">
+                      class="flex flex-col items-center gap-3 px-3 pt-6 pb-5 rounded-r-xl text-white
+                             bg-red-600 hover:bg-red-700 active:bg-red-800 transition-colors
+                             focus:outline-none focus-visible:ring-4 focus-visible:ring-red-300">
               </button>
             </div>
 
-            <!-- Divisória em raio, desenhada, entre os dois lados -->
-            <svg class="pointer-events-none absolute inset-y-0 left-1/2 h-full w-6 -translate-x-1/2"
-                 viewBox="0 0 24 200" preserveAspectRatio="none" aria-hidden="true">
-              <polygon points="4,0 16,50 4,100 16,150 4,200 12,200 24,150 12,100 24,50 12,0"
-                       fill="#ffffff" />
-            </svg>
-
-            <span class="duelo-vs pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                         text-4xl font-extrabold italic tracking-tight">VS</span>
+            <span class="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                         rounded-full bg-white dark:bg-gray-800 px-2 py-0.5
+                         text-sm font-bold text-gray-700 dark:text-gray-200 shadow">VS</span>
           </div>
 
           <button type="button" id="botaoCancelarDuelos"
@@ -262,7 +247,7 @@
           function preencherDuelo(botao, linha) {
               botao.textContent = '';
 
-              var tamanho = 'w-full max-w-[10rem] aspect-square rounded-full ring-4 ring-white/40 shadow-lg';
+              var tamanho = 'w-full max-w-[10rem] aspect-square rounded-full ring-2 ring-white/50';
 
               if (linha.dataset.avatar) {
                   var foto = document.createElement('img');
@@ -279,7 +264,7 @@
               }
 
               var rotulo = document.createElement('span');
-              rotulo.className = 'w-full break-words text-lg font-bold leading-tight drop-shadow';
+              rotulo.className = 'w-full break-words text-lg font-bold leading-tight';
               rotulo.textContent = nome(linha);
               botao.appendChild(rotulo);
           }
