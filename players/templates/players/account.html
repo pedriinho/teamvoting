@@ -26,10 +26,41 @@
 
   <div class="flex-grow w-full max-w-2xl mx-auto py-6 px-4 flex flex-col gap-6">
 
+    {% if messages %}
+    <div class="flex flex-col gap-2">
+      {% for message in messages %}
+      <div class="rounded px-4 py-3 text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200{% else %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 sm:p-6 transition-colors">
-      <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-        <i class="fas fa-user text-gray-500 dark:text-gray-400"></i> {{ user.username }}
-      </h1>
+      <div class="flex items-center gap-4">
+        {% include 'players/avatar.html' with player=avatar_owner classes='w-20 h-20 text-2xl' %}
+        <div class="min-w-0">
+          <h1 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-100 truncate">{{ user.username }}</h1>
+          <form method="post" action="{% url 'avatar_update' %}" enctype="multipart/form-data"
+                class="mt-2 flex flex-wrap items-center gap-2">
+            {% csrf_token %}
+            <input type="file" name="avatar" accept="image/*" required
+                   class="text-sm text-gray-600 dark:text-gray-300 file:mr-2 file:rounded file:border-0 file:bg-gray-200 dark:file:bg-gray-700 file:px-3 file:py-1 file:text-sm file:text-gray-800 dark:file:text-gray-100">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded">
+              Enviar foto
+            </button>
+          </form>
+          {% if profile.avatar %}
+          <form method="post" action="{% url 'avatar_update' %}" class="mt-1">
+            {% csrf_token %}
+            <input type="hidden" name="remove" value="1">
+            <button type="submit" class="text-sm text-gray-500 dark:text-gray-400 hover:underline">
+              Remover foto
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
 
       {% if player %}
         <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Participando do racha.</p>

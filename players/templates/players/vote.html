@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{% load custom_filters %}<!DOCTYPE html>
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
@@ -66,8 +66,12 @@
           <ul id="listaJogadores" class="flex flex-col gap-1 select-none">
             {% for player in players %}
             <li data-player-id="{{ player.id }}"
+                data-avatar="{% if player.avatar %}{{ player.avatar.url }}{% endif %}"
+                data-iniciais="{{ player.initials }}"
+                data-hue="{{ player.name|avatar_hue }}"
                 class="flex items-center gap-2 py-2 px-2 rounded bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700">
               <span data-posicao class="w-6 shrink-0 text-center text-sm font-bold text-gray-500 dark:text-gray-400"></span>
+              {% include 'players/avatar.html' with player=player classes='w-9 h-9 text-sm' %}
               <span data-nome class="flex-grow min-w-0 truncate font-medium text-gray-700 dark:text-gray-200">{{ player.name }}</span>
               <button type="button" data-mover="cima" title="Subir"
                       class="shrink-0 w-8 h-8 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600">
@@ -96,11 +100,11 @@
 
           <div class="flex items-stretch gap-3 w-full">
             <button type="button" data-duelo="esquerda"
-                    class="flex-1 min-w-0 px-3 py-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold break-words">
+                    class="flex-1 min-w-0 px-3 py-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold break-words">
             </button>
             <span class="self-center text-sm text-gray-500 dark:text-gray-400">vs</span>
             <button type="button" data-duelo="direita"
-                    class="flex-1 min-w-0 px-3 py-6 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold break-words">
+                    class="flex-1 min-w-0 px-3 py-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold break-words">
             </button>
           </div>
 
@@ -231,6 +235,34 @@
               return linha.querySelector('[data-nome]').textContent.trim();
           }
 
+          function preencherDuelo(botao, linha) {
+              botao.textContent = '';
+
+              var moldura = document.createElement('span');
+              moldura.className = 'flex flex-col items-center gap-2';
+
+              if (linha.dataset.avatar) {
+                  var foto = document.createElement('img');
+                  foto.src = linha.dataset.avatar;
+                  foto.alt = '';
+                  foto.className = 'w-20 h-20 rounded-full object-cover bg-white/20';
+                  moldura.appendChild(foto);
+              } else {
+                  var iniciais = document.createElement('span');
+                  iniciais.className = 'w-20 h-20 rounded-full flex items-center justify-center text-2xl';
+                  iniciais.style.backgroundColor = 'hsl(' + linha.dataset.hue + ' 42% 42%)';
+                  iniciais.textContent = linha.dataset.iniciais;
+                  moldura.appendChild(iniciais);
+              }
+
+              var rotulo = document.createElement('span');
+              rotulo.className = 'min-w-0 break-words';
+              rotulo.textContent = nome(linha);
+              moldura.appendChild(rotulo);
+
+              botao.appendChild(moldura);
+          }
+
           function iniciarDuelos() {
               var atuais = linhas();
 
@@ -278,8 +310,8 @@
 
               var meio = Math.floor((inicio + fim) / 2);
 
-              botaoEsquerda.textContent = nome(restantes[0]);
-              botaoDireita.textContent = nome(ordenados[meio]);
+              preencherDuelo(botaoEsquerda, restantes[0]);
+              preencherDuelo(botaoDireita, ordenados[meio]);
               progresso.textContent = 'Duelo ' + (duelosFeitos + 1) + ', faltam ' + restantes.length + ' jogadores para posicionar.';
           }
 

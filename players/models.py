@@ -5,12 +5,30 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 
+class Profile(models.Model):
+    user = models.OneToOneField(User, related_name='profile', on_delete=models.CASCADE)
+    avatar = models.ImageField(upload_to='avatars/', blank=True)
+
+    def __str__(self):
+        return f'Perfil de {self.user.username}'
+
+
 class Player(models.Model):
     user = models.OneToOneField(User, related_name='player', on_delete=models.CASCADE)
 
     @property
     def name(self):
         return self.user.username
+
+    @property
+    def avatar(self):
+        profile = getattr(self.user, 'profile', None)
+
+        return profile.avatar if profile and profile.avatar else None
+
+    @property
+    def initials(self):
+        return self.name[:2].upper()
 
     def __str__(self):
         return self.name

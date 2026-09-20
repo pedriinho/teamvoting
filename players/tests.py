@@ -1,12 +1,18 @@
 import datetime
+import pathlib
+import shutil
+import tempfile
+from io import BytesIO
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
-from .models import GameConfig, Player, RoundResult, Vote, VotingRound
+from .models import GameConfig, Player, Profile, RoundResult, Vote, VotingRound
 from .utils import TIMEZONE, archive_closed_round, current_round_date, rank_players
 from .views import compact_vote_ranks
 
@@ -491,3 +497,100 @@ class AdminRemovePlayerTests(TestCase):
 
         self.assertRedirects(response, reverse('home'))
         self.assertFalse(Player.objects.filter(id=self.ana.id).exists())
+
+
+def image_upload(name='foto.png', size=(600, 400), fmt='PNG'):
+    buffer = BytesIO()
+    Image.new('RGB', size, (10, 120, 200)).save(buffer, format=fmt)
+
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type=f'image/{fmt.lower()}')
+
+
+class AvatarUploadTests(TestCase):
+    def setUp(self):
+        self.media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.media, True)
+
+        self.user = User.objects.create_user('ana', password=CREDENCIAL_DE_TESTE)
+        self.client.force_login(self.user)
+
+        overrides = override_settings(MEDIA_ROOT=self.media)
+        overrides.enable()
+        self.addCleanup(overrides.disable)
+
+    def profile(self):
+        return Profile.objects.get(user=self.user)
+
+    def test_upload_is_cropped_to_a_square(self):
+        response = self.client.post(reverse('avatar_update'), {'avatar': image_upload()})
+
+        self.assertRedirects(response, reverse('account'))
+
+        with Image.open(self.profile().avatar.path) as saved:
+            self.assertEqual(saved.size, (256, 256))
+            self.assertEqual(saved.format, 'JPEG')
+
+    def test_upload_replaces_the_previous_file(self):
+        self.client.post(reverse('avatar_update'), {'avatar': image_upload()})
+        primeira = self.profile().avatar.path
+
+        self.client.post(reverse('avatar_update'), {'avatar': image_upload('outra.png')})
+        segunda = self.profile().avatar.path
+
+        # O nome é derivado do usuário, então a foto nova ocupa o mesmo arquivo
+        # e não sobra nada para trás.
+        self.assertEqual(primeira, segunda)
+        self.assertTrue(pathlib.Path(segunda).exists())
+        self.assertEqual(len(list((pathlib.Path(self.media) / 'avatars').iterdir())), 1)
+
+    def test_a_file_that_is_not_an_image_is_rejected(self):
+        naoimagem = SimpleUploadedFile('vote.txt', b'nao sou imagem', content_type='image/png')
+
+        response = self.client.post(reverse('avatar_update'), {'avatar': naoimagem})
+
+        self.assertRedirects(response, reverse('account'))
+        self.assertFalse(self.profile().avatar)
+
+    def test_oversized_file_is_rejected(self):
+        grande = SimpleUploadedFile('grande.png', b'x' * (5 * 1024 * 1024 + 1))
+
+        self.client.post(reverse('avatar_update'), {'avatar': grande})
+
+        self.assertFalse(self.profile().avatar)
+
+    def test_removing_deletes_the_file(self):
+        self.client.post(reverse('avatar_update'), {'avatar': image_upload()})
+        caminho = self.profile().avatar.path
+
+        self.client.post(reverse('avatar_update'), {'remove': '1'})
+
+        self.assertFalse(self.profile().avatar)
+        self.assertFalse(pathlib.Path(caminho).exists())
+
+    def test_get_is_not_allowed(self):
+        response = self.client.get(reverse('avatar_update'))
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_the_photo_shows_up_on_the_vote_page(self):
+        Player.objects.create(user=self.user)
+        (bruno,) = make_players('bruno')
+        self.client.force_login(bruno.user)
+        self.client.post(reverse('avatar_update'), {'avatar': image_upload()})
+        url_foto = Profile.objects.get(user=bruno.user).avatar.url
+
+        self.client.force_login(self.user)
+
+        with patch('players.decorators.is_voting_open', return_value=True):
+            response = self.client.get(reverse('vote'))
+
+        self.assertContains(response, url_foto)
+
+    def test_players_without_a_photo_fall_back_to_initials(self):
+        Player.objects.create(user=self.user)
+        make_players('bruno')
+
+        with patch('players.decorators.is_voting_open', return_value=True):
+            response = self.client.get(reverse('vote'))
+
+        self.assertContains(response, 'data-iniciais="BR"')

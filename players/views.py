@@ -9,12 +9,22 @@ from django.db import transaction
 from django.shortcuts import redirect, render, get_object_or_404
 from django.views.decorators.http import require_POST
 
+from . import avatars
 from .decorators import teams_released_only, vote_open_only
-from .models import GameConfig, Player, RoundResult, Vote
+from .models import GameConfig, Player, Profile, RoundResult, Vote
 from .utils import archive_closed_round, are_teams_available, current_round_date, rank_players
 
 # Acima disso, ordenar arrastando fica cansativo e a votação começa em duelos.
 DUELS_THRESHOLD = 10
+
+
+class AvatarOwner:
+    """Serve o parcial de avatar para quem não está na lista de jogadores."""
+
+    def __init__(self, user, profile):
+        self.name = user.username
+        self.avatar = profile.avatar or None
+        self.initials = self.name[:2].upper()
 
 ERROR_TRANSLATIONS = {
     "A user with that username already exists.": "Já existe um usuário com esse nome.",
@@ -55,9 +65,9 @@ def home(request):
     show_scores = are_teams_available()
 
     if show_scores:
-        players = rank_players(Player.objects.select_related('user'))
+        players = rank_players(Player.objects.select_related('user__profile'))
     else:
-        players = list(Player.objects.select_related('user').order_by('id'))
+        players = list(Player.objects.select_related('user__profile').order_by('id'))
 
     return render(request, 'players/home.html', {
         'players': players,
@@ -90,7 +100,7 @@ def leave_game(request):
 @login_required
 @vote_open_only
 def vote(request):
-    players = list(Player.objects.exclude(user=request.user).select_related('user'))
+    players = list(Player.objects.exclude(user=request.user).select_related('user__profile'))
     player_ids = {player.id for player in players}
 
     round_date = current_round_date()
@@ -144,7 +154,7 @@ def vote(request):
 def teams(request):
     archive_closed_round()
 
-    players = rank_players(Player.objects.select_related('user'))
+    players = rank_players(Player.objects.select_related('user__profile'))
     total_players = len(players)
     max_team_size = GameConfig.load().players_per_team
     num_teams = (total_players + max_team_size - 1) // max_team_size
@@ -178,6 +188,7 @@ def account(request):
 
     name = request.user.username
     player = Player.objects.filter(user=request.user).first()
+    profile, _ = Profile.objects.get_or_create(user=request.user)
 
     history = list(
         RoundResult.objects.filter(player_name=name)
@@ -190,7 +201,7 @@ def account(request):
     current = None
 
     if player and are_teams_available():
-        ranked = rank_players(Player.objects.select_related('user'))
+        ranked = rank_players(Player.objects.select_related('user__profile'))
         current = next((p for p in ranked if p.id == player.id), None)
 
         if current is not None:
@@ -198,11 +209,45 @@ def account(request):
 
     return render(request, 'players/account.html', {
         'player': player,
+        'profile': profile,
+        'avatar_owner': player or AvatarOwner(request.user, profile),
         'history': history,
         'best_position': best_position,
         'current': current,
         'rounds_played': len(history),
     })
+
+
+@login_required
+@require_POST
+def avatar_update(request):
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+
+    if request.POST.get('remove'):
+        profile.avatar.delete(save=True)
+        messages.success(request, 'Foto removida.')
+
+        return redirect('account')
+
+    upload = request.FILES.get('avatar')
+
+    if not upload:
+        messages.error(request, 'Escolha um arquivo de imagem.')
+
+        return redirect('account')
+
+    try:
+        content = avatars.process(upload)
+    except avatars.InvalidAvatarError as error:
+        messages.error(request, str(error))
+
+        return redirect('account')
+
+    profile.avatar.delete(save=False)
+    profile.avatar.save(f'{request.user.id}.jpg', content, save=True)
+    messages.success(request, 'Foto atualizada!')
+
+    return redirect('account')
 
 
 def signup(request):

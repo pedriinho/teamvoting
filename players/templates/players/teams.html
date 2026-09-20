@@ -42,8 +42,11 @@
         </div>
         <ul class="divide-y divide-gray-200 dark:divide-gray-700">
           {% for player in team.players %}
-            <li class="flex justify-between gap-3 py-2 text-gray-800 dark:text-gray-200">
-              <span class="min-w-0 truncate">{{ player.name }}</span>
+            <li class="flex items-center justify-between gap-3 py-2 text-gray-800 dark:text-gray-200">
+              <span class="flex min-w-0 items-center gap-3">
+                {% include 'players/avatar.html' with player=player classes='w-9 h-9 text-sm' %}
+                <span class="min-w-0 truncate">{{ player.name }}</span>
+              </span>
               <span class="shrink-0 font-medium text-gray-600 dark:text-gray-400">
                 {{ player.position }}º
                 {% if player.avg_rank %}
