@@ -1,16 +1,30 @@
 import datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.shortcuts import redirect, render, get_object_or_404
+from django.views.decorators.http import require_POST
 
-from .decorators import only_tuesday_evening, vote_open_only
-from .models import GameConfig, Player, Vote
-from .utils import are_teams_available
+from . import avatars
+from .decorators import teams_released_only, vote_open_only
+from .models import GameConfig, Player, Profile, RoundResult, Vote
+from .utils import archive_closed_round, are_teams_available, current_round_date, rank_players
+
+# Acima disso, ordenar arrastando fica cansativo e a votação começa em duelos.
+DUELS_THRESHOLD = 10
+
+
+class AvatarOwner:
+    """Serve o parcial de avatar para quem não está na lista de jogadores."""
+
+    def __init__(self, user, profile):
+        self.name = user.username
+        self.avatar = profile.avatar or None
+        self.initials = self.name[:2].upper()
 
 ERROR_TRANSLATIONS = {
     "A user with that username already exists.": "Já existe um usuário com esse nome.",
@@ -20,108 +34,65 @@ ERROR_TRANSLATIONS = {
 }
 
 
-def get_main_players_limit():
-    return GameConfig.load().main_players_limit
+def compact_vote_ranks():
+    """Renumera a lista de cada votante para 1..N, fechando buracos."""
+    ballots = Vote.objects.exclude(voter=None).values_list('voter_id', 'round_date').distinct()
 
+    for voter_id, round_date in ballots:
+        ballot = Vote.objects.filter(voter_id=voter_id, round_date=round_date)
+        votes = list(ballot.order_by('rank', 'id'))
 
-def reorder_waiting_list():
-    waiting_list = Player.objects.filter(is_main=False).order_by('queue_position', 'id')
-    for i, player in enumerate(waiting_list, start=1):
-        player.queue_position = i
-        player.save()
+        if [vote.rank for vote in votes] == list(range(1, len(votes) + 1)):
+            continue
 
-
-def rebalance_players():
-    limit = get_main_players_limit()
-    main_players = Player.objects.filter(is_main=True).order_by('id')
-    main_count = main_players.count()
-
-    if main_count > limit:
-        players_to_wait = main_players[limit:]
-        last_position = Player.objects.filter(is_main=False).count()
-
-        for player in players_to_wait:
-            last_position += 1
-            player.is_main = False
-            player.queue_position = last_position
-            player.save()
-
-    elif main_count < limit:
-        available_slots = limit - main_count
-        waiting_players = Player.objects.filter(is_main=False).order_by('queue_position', 'id')[:available_slots]
-
-        for player in waiting_players:
-            player.is_main = True
-            player.queue_position = None
-            player.save()
-
-    reorder_waiting_list()
+        with transaction.atomic():
+            ballot.delete()
+            Vote.objects.bulk_create([
+                Vote(
+                    player_id=vote.player_id,
+                    voter_id=voter_id,
+                    round_date=round_date,
+                    rank=position,
+                )
+                for position, vote in enumerate(votes, start=1)
+            ])
 
 
 def home(request):
-    rebalance_players()
-
     config = GameConfig.load()
-    main_players_limit = config.main_players_limit
-    racha_total = config.racha_value
+    archive_closed_round(config)
 
-    main_players = Player.objects.filter(is_main=True).order_by('id')
-    waiting_players = Player.objects.filter(is_main=False).order_by('queue_position')
-    is_main_player = main_players.filter(name=request.user.username).exists() if request.user.is_authenticated else False
     show_scores = are_teams_available()
-    show_leave = False
-    value_racha = racha_total
-    hide_racha_value = config.hide_racha_value
 
-    if request.user.is_authenticated:
-        show_leave = Player.objects.filter(name=request.user.username).exists()
-
-    qtd_main = main_players.count()
-
-    if qtd_main > 0:
-        value_racha = (racha_total / Decimal(qtd_main)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if show_scores:
+        players = rank_players(Player.objects.select_related('user__profile'))
+    else:
+        players = list(Player.objects.select_related('user__profile').order_by('id'))
 
     return render(request, 'players/home.html', {
-        'main_players': main_players,
-        'waiting_players': waiting_players,
-        'is_main_player': is_main_player,
+        'players': players,
         'show_scores': show_scores,
-        'show_leave': show_leave,
-        'qtd_main': qtd_main,
-        'value_racha': value_racha,
-        'racha_total': racha_total,
-        'racha_total_input': str(racha_total),
-        'main_players_limit': main_players_limit,
-        'hide_racha_value': hide_racha_value,
+        'player_count': len(players),
     })
 
 
 @login_required
 def join_game(request):
-    if Player.objects.filter(name=request.user.username).exists():
-        return redirect('home')
-
-    main_players_limit = get_main_players_limit()
-    main_count = Player.objects.filter(is_main=True).count()
-
-    if main_count < main_players_limit:
-        Player.objects.create(name=request.user.username, is_main=True)
-    else:
-        last_position = Player.objects.filter(is_main=False).count()
-        Player.objects.create(name=request.user.username, is_main=False, queue_position=last_position + 1)
+    if not Player.objects.filter(user=request.user).exists():
+        Player.objects.create(user=request.user)
 
     return redirect('home')
 
 
 @login_required
 def leave_game(request):
-    player = get_object_or_404(Player, name=request.user.username)
+    player = get_object_or_404(Player, user=request.user)
 
     Vote.objects.filter(player_id=player.id).delete()
     Vote.objects.filter(voter=request.user).delete()
 
     player.delete()
-    rebalance_players()
+    compact_vote_ranks()
 
     return redirect('home')
 
@@ -129,57 +100,154 @@ def leave_game(request):
 @login_required
 @vote_open_only
 def vote(request):
-    is_main_player = Player.objects.filter(name=request.user.username, is_main=True).exists()
-    players = Player.objects.filter(is_main=True).exclude(name=request.user.username)
-    player_ids = set(players.values_list('id', flat=True))
+    players = list(Player.objects.exclude(user=request.user).select_related('user__profile'))
+    player_ids = {player.id for player in players}
+
+    round_date = current_round_date()
 
     if request.method == 'POST':
-        for key, value in request.POST.items():
-            if key.startswith('score_') and value.isdigit():
-                try:
-                    player_id = int(key.split('_')[1])
-                except ValueError:
-                    continue
+        raw_order = request.POST.get('order', '')
 
-                if player_id not in player_ids:
-                    continue
+        try:
+            ordered_ids = [int(chunk) for chunk in raw_order.split(',') if chunk]
+        except ValueError:
+            ordered_ids = []
 
-                score_int = int(value)
+        if sorted(ordered_ids) != sorted(player_ids):
+            messages.error(
+                request,
+                'A ordenação enviada não corresponde à lista de jogadores. Tente novamente.',
+            )
+            return redirect('vote')
 
-                if 1 <= score_int <= 10:
-                    player = Player.objects.get(id=player_id)
-                    Vote.objects.update_or_create(player=player, voter=request.user, defaults={'score': score_int})
+        with transaction.atomic():
+            Vote.objects.filter(voter=request.user, round_date=round_date).delete()
+            Vote.objects.bulk_create([
+                Vote(
+                    player_id=player_id,
+                    voter=request.user,
+                    round_date=round_date,
+                    rank=position,
+                )
+                for position, player_id in enumerate(ordered_ids, start=1)
+            ])
 
-        return redirect('teams')
+        messages.success(request, 'Sua ordenação foi registrada!')
 
-    existing_votes = Vote.objects.filter(voter=request.user)
-    votes_dict = {vote.player.id: vote.score for vote in existing_votes}
+        return redirect('home')
+
+    existing_ranks = dict(
+        Vote.objects.filter(voter=request.user, round_date=round_date)
+        .values_list('player_id', 'rank')
+    )
+
+    players.sort(key=lambda p: (p.id not in existing_ranks, existing_ranks.get(p.id, 0), p.name))
 
     return render(request, 'players/vote.html', {
         'players': players,
-        'votes_dict': votes_dict,
-        'is_main_player': is_main_player,
+        'has_saved_vote': bool(existing_ranks),
+        'start_with_duels': not existing_ranks and len(players) > DUELS_THRESHOLD,
     })
 
 
-@only_tuesday_evening
+@teams_released_only
 def teams(request):
-    players = list(Player.objects.filter(is_main=True))
-    players = sorted(players, key=lambda p: p.average_score(), reverse=True)
+    archive_closed_round()
+
+    players = rank_players(Player.objects.select_related('user__profile'))
+    total_players = len(players)
     max_team_size = GameConfig.load().players_per_team
-    num_teams = (len(players) + max_team_size - 1) // max_team_size
+    num_teams = (total_players + max_team_size - 1) // max_team_size
     teams = [[] for _ in range(num_teams)]
-    team_scores = [0] * num_teams
+    team_strengths = [0] * num_teams
 
     for player in players:
+        player.strength = total_players + 1 - player.position
+
         best_index = min(
             (i for i in range(num_teams) if len(teams[i]) < max_team_size),
-            key=lambda i: (len(teams[i]), team_scores[i])
+            key=lambda i: (len(teams[i]), team_strengths[i])
         )
         teams[best_index].append(player)
-        team_scores[best_index] += player.average_score()
+        team_strengths[best_index] += player.strength
 
-    return render(request, 'players/teams.html', {'teams': teams})
+    teams_with_summary = [
+        {
+            'players': team,
+            'average_position': sum(p.position for p in team) / len(team) if team else 0,
+        }
+        for team in teams
+    ]
+
+    return render(request, 'players/teams.html', {'teams': teams_with_summary})
+
+
+@login_required
+def account(request):
+    archive_closed_round()
+
+    name = request.user.username
+    player = Player.objects.filter(user=request.user).first()
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+
+    history = list(
+        RoundResult.objects.filter(player_name=name)
+        .select_related('voting_round')
+        .order_by('-voting_round__closed_on')
+    )
+
+    best_position = min((result.position for result in history), default=None)
+
+    current = None
+
+    if player and are_teams_available():
+        ranked = rank_players(Player.objects.select_related('user__profile'))
+        current = next((p for p in ranked if p.id == player.id), None)
+
+        if current is not None:
+            current.total_players = len(ranked)
+
+    return render(request, 'players/account.html', {
+        'player': player,
+        'profile': profile,
+        'avatar_owner': player or AvatarOwner(request.user, profile),
+        'history': history,
+        'best_position': best_position,
+        'current': current,
+        'rounds_played': len(history),
+    })
+
+
+@login_required
+@require_POST
+def avatar_update(request):
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+
+    if request.POST.get('remove'):
+        profile.avatar.delete(save=True)
+        messages.success(request, 'Foto removida.')
+
+        return redirect('account')
+
+    upload = request.FILES.get('avatar')
+
+    if not upload:
+        messages.error(request, 'Escolha um arquivo de imagem.')
+
+        return redirect('account')
+
+    try:
+        content = avatars.process(upload)
+    except avatars.InvalidAvatarError as error:
+        messages.error(request, str(error))
+
+        return redirect('account')
+
+    profile.avatar.delete(save=False)
+    profile.avatar.save(f'{request.user.id}.jpg', content, save=True)
+    messages.success(request, 'Foto atualizada!')
+
+    return redirect('account')
 
 
 def signup(request):
@@ -208,38 +276,31 @@ def signup(request):
 
 @user_passes_test(lambda u: u.is_superuser)
 def admin_add_player(request):
-    existing_players = Player.objects.values_list('name', flat=True)
-    users_to_add = User.objects.exclude(username__in=existing_players)
+    users_to_add = User.objects.filter(player=None)
 
     if request.method == 'POST':
         username = request.POST.get('username')
 
         if username:
-            main_players_limit = get_main_players_limit()
-            main_count = Player.objects.filter(is_main=True).count()
-
-            if main_count < main_players_limit:
-                Player.objects.create(name=username, is_main=True)
-                messages.success(request, f'Usuário {username} adicionado como player principal!')
-            else:
-                last_position = Player.objects.filter(is_main=False).count()
-                Player.objects.create(name=username, is_main=False, queue_position=last_position + 1)
-                messages.success(request, f'Usuário {username} adicionado na fila de espera!')
+            user = get_object_or_404(User, username=username)
+            Player.objects.get_or_create(user=user)
+            messages.success(request, f'Usuário {username} adicionado!')
 
             return redirect('home')
 
     return render(request, 'players/admin_add_player.html', {'users_to_add': users_to_add})
 
 
+@require_POST
 @user_passes_test(lambda u: u.is_superuser)
 def admin_remove_player(request, player_id):
     player = get_object_or_404(Player, id=player_id)
 
     Vote.objects.filter(player=player).delete()
-    Vote.objects.filter(voter__username=player.name).delete()
+    Vote.objects.filter(voter=player.user).delete()
 
     player.delete()
-    rebalance_players()
+    compact_vote_ranks()
 
     return redirect('home')
 
@@ -255,22 +316,6 @@ def admin_update_settings(request):
             messages.error(request, 'Quantidade de jogadores por time inválida.')
             return redirect('/')
 
-        try:
-            main_players_limit = int(request.POST.get('main_players_limit', ''))
-        except (TypeError, ValueError):
-            messages.error(request, 'Quantidade máxima da lista principal inválida.')
-            return redirect('/')
-
-        racha_value_raw = request.POST.get('racha_value', '').replace(',', '.')
-
-        try:
-            parsed_racha_value = Decimal(racha_value_raw).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        except InvalidOperation:
-            messages.error(request, 'Valor do racha inválido.')
-            return redirect('/')
-
-        hide_racha_value = request.POST.get('hide_racha_value') == 'on'
-
         vote_day = request.POST.get('vote_day')
         vote_start_time = request.POST.get('vote_start_time')
         vote_end_time = request.POST.get('vote_end_time')
@@ -283,9 +328,6 @@ def admin_update_settings(request):
             return redirect('/')
 
         config.players_per_team = players_per_team
-        config.main_players_limit = main_players_limit
-        config.racha_value = parsed_racha_value
-        config.hide_racha_value = hide_racha_value
         config.vote_day = vote_day
         config.vote_start_time = parsed_start_time
         config.vote_end_time = parsed_end_time
@@ -298,7 +340,6 @@ def admin_update_settings(request):
                     messages.error(request, error)
             return redirect('/')
 
-        rebalance_players()
         messages.success(request, 'Configurações atualizadas com sucesso.')
 
     return redirect('/')

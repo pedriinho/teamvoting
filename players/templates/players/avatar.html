@@ -1,0 +1,7 @@
+{% load custom_filters %}
+{% if player.avatar %}
+  <img src="{{ player.avatar.url }}" alt="" class="{{ classes|default:'w-8 h-8' }} shrink-0 rounded-full object-cover bg-gray-200 dark:bg-gray-700">
+{% else %}
+  <span class="{{ classes|default:'w-8 h-8' }} shrink-0 rounded-full flex items-center justify-center font-semibold text-white"
+        style="background-color: hsl({{ player.name|avatar_hue }} 42% 42%)">{{ player.initials }}</span>
+{% endif %}

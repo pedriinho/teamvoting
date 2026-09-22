@@ -15,9 +15,11 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.static import serve
 
     
     
@@ -31,4 +33,7 @@ urlpatterns = [
         name='login',
     ),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
+    # Serve as fotos enviadas. Num host como o PythonAnywhere, mapear /media/
+    # na aba Web faz o servidor atender antes de chegar aqui.
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
 ]

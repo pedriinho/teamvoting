@@ -1,46 +1,52 @@
-<nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-4 px-6 shadow-md flex justify-between items-center fixed top-0 left-0 w-full z-50 transition-colors">
+<nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-3 px-4 sm:px-6 shadow-md flex flex-wrap items-center justify-between gap-y-2 sticky top-0 left-0 w-full z-50 transition-colors">
 
 
-    <div class="flex items-center gap-3">
-        <i class="fas fa-futbol text-2xl text-gray-700 dark:text-gray-300"></i>
-        <a href="{% url 'home' %}" class="text-xl font-semibold text-gray-900 dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 transition">
-            Gerenciamento de Jogadores
+    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+        <i class="fas fa-futbol text-xl sm:text-2xl text-gray-700 dark:text-gray-300 shrink-0"></i>
+        <a href="{% url 'home' %}" class="text-base sm:text-xl font-semibold text-gray-900 dark:text-gray-100 hover:text-gray-700 dark:hover:text-gray-300 transition truncate">
+            <span class="sm:hidden">Jogadores</span>
+            <span class="hidden sm:inline">Gerenciamento de Jogadores</span>
         </a>
 
     </div>
     {% if user.is_authenticated %}
-    <div class="absolute left-1/2 transform -translate-x-1/2 text-gray-800 dark:text-gray-200 font-semibold">
+    <div class="order-last w-full min-w-0 text-center text-sm truncate text-gray-800 dark:text-gray-200 font-semibold lg:order-none lg:w-auto lg:flex-1 lg:px-4 lg:text-base">
         Olá, {{ user.username }}!
     </div>
     {% endif %}
-    <div class="flex gap-3">
-        {% if user.is_authenticated and is_main_player %}
-            <a href="{% url 'vote' %}" class="btn-hover bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2">
-                <i class="fas fa-vote-yea"></i> Votar
+    <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        {% if user.is_authenticated and is_player %}
+            <a href="{% url 'vote' %}" title="Votar" class="btn-hover bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded flex items-center gap-2">
+                <i class="fas fa-vote-yea"></i> <span class="hidden sm:inline">Votar</span>
             </a>
         {% endif %}
-        <a href="{% url 'teams' %}" class="btn-hover bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded flex items-center gap-2">
-            <i class="fas fa-users"></i> Ver Times
+        {% if user.is_authenticated %}
+            <a href="{% url 'account' %}" title="Minha conta" class="btn-hover bg-teal-600 hover:bg-teal-700 text-white px-3 sm:px-4 py-2 rounded flex items-center gap-2">
+                <i class="fas fa-user"></i> <span class="hidden sm:inline">Conta</span>
+            </a>
+        {% endif %}
+        <a href="{% url 'teams' %}" title="Ver Times" class="btn-hover bg-indigo-600 hover:bg-indigo-700 text-white px-3 sm:px-4 py-2 rounded flex items-center gap-2">
+            <i class="fas fa-users"></i> <span class="hidden sm:inline">Ver Times</span>
         </a>
         {% if user.is_superuser %}
-            <button type="button" onclick="abrirModalConfiguracoes()" class="btn-hover bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded flex items-center gap-2">
-                <i class="fas fa-cog"></i> Configurações
+            <button type="button" onclick="abrirModalConfiguracoes()" title="Configurações" class="btn-hover bg-purple-600 hover:bg-purple-700 text-white px-3 sm:px-4 py-2 rounded flex items-center gap-2">
+                <i class="fas fa-cog"></i> <span class="hidden sm:inline">Configurações</span>
             </button>
         {% endif %}
-        <button type="button" onclick="alternarTema()" title="Alternar tema claro/escuro" class="btn-hover bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 px-4 py-2 rounded flex items-center gap-2">
+        <button type="button" onclick="alternarTema()" title="Alternar tema claro/escuro" class="btn-hover bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 px-3 sm:px-4 py-2 rounded flex items-center gap-2">
             <i class="fas fa-moon dark:hidden"></i>
             <i class="fas fa-sun hidden dark:inline"></i>
         </button>
         {% if user.is_authenticated %}
             <form action="{% url 'logout' %}" method="post" style="display:inline;">
                 {% csrf_token %}
-                <button type="submit" class="btn-hover bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded flex items-center gap-2">
-                    <i class="fas fa-sign-out-alt"></i> Sair
+                <button type="submit" title="Sair" class="btn-hover bg-gray-600 hover:bg-gray-700 text-white px-3 sm:px-4 py-2 rounded flex items-center gap-2">
+                    <i class="fas fa-sign-out-alt"></i> <span class="hidden sm:inline">Sair</span>
                 </button>
             </form>
         {% else %}
-            <a href="{% url 'login' %}" class="btn-hover bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-2">
-                <i class="fas fa-sign-in-alt"></i> Login
+            <a href="{% url 'login' %}" title="Login" class="btn-hover bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded flex items-center gap-2">
+                <i class="fas fa-sign-in-alt"></i> <span class="hidden sm:inline">Login</span>
             </a>
         {% endif %}
     </div>
@@ -76,33 +82,6 @@
                 <input type="number" name="players_per_team" id="players_per_team" min="1" step="1"
                        value="{{ game_config.players_per_team }}"
                        class="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 w-full" required>
-            </div>
-
-            <div>
-                <label for="main_players_limit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Quantidade máxima da lista principal
-                </label>
-                <input type="number" name="main_players_limit" id="main_players_limit" min="1" step="1"
-                       value="{{ game_config.main_players_limit }}"
-                       class="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 w-full" required>
-            </div>
-
-            <div>
-                <label for="racha_value" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Valor total do racha (R$)
-                </label>
-                <input type="number" name="racha_value" id="racha_value" min="0.01" step="0.01"
-                       value="{{ game_config.racha_value }}"
-                       class="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-3 py-2 w-full" required>
-            </div>
-
-            <div class="flex items-center gap-2">
-                <input type="checkbox" name="hide_racha_value" id="hide_racha_value"
-                       {% if game_config.hide_racha_value %}checked{% endif %}
-                       class="h-4 w-4 border-gray-300 dark:border-gray-600 rounded">
-                <label for="hide_racha_value" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Ocultar valor do racha (não aparece para ninguém na Lista Principal)
-                </label>
             </div>
 
             <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
